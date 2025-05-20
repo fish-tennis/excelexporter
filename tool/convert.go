@@ -1,6 +1,7 @@
 package tool
 
 import (
+	"errors"
 	"fmt"
 	"github.com/jhump/protoreflect/desc"
 	"github.com/xuri/excelize/v2"
@@ -13,12 +14,14 @@ type SheetOption struct {
 	SheetName      string
 	MessageName    string
 	KeyName        string
+	KeyType        string // int int32 int64 uint uint32 uint64 string
 	ExportFileName string
 }
 
 type ColumnOption struct {
-	Name   string
-	Format string
+	Name        string
+	Format      string
+	ColumnIndex int
 }
 
 // ColumnName#format=json#arg=value
@@ -42,6 +45,111 @@ func ConvertColumnOption(cell string) *ColumnOption {
 		}
 	}
 	return opt
+}
+
+func ConvertSheetToMap(excelFileName string, opt *SheetOption) (map[any]any, error) {
+	msgDesc := FindMessageDescriptor(opt.MessageName)
+	if msgDesc == nil {
+		return nil, fmt.Errorf("message %s not found", opt.MessageName)
+	}
+	keyFieldDesc := FindFieldDescriptor(msgDesc, opt.KeyName)
+	if keyFieldDesc != nil {
+		opt.KeyName = keyFieldDesc.GetJSONName() // 因为要导出为json格式,所以用json名
+	}
+	if opt.KeyType == "" && keyFieldDesc != nil {
+		opt.KeyType = GetKeyTypeString(keyFieldDesc)
+	}
+	f, err := excelize.OpenFile(excelFileName)
+	if err != nil {
+		fmt.Println(err)
+		return nil, err
+	}
+	rows, err := f.Rows(opt.SheetName)
+	if err != nil {
+		fmt.Println(err)
+		return nil, err
+	}
+	defer func() {
+		if err = rows.Close(); err != nil {
+			fmt.Println(err)
+		}
+	}()
+	var columnOpts []*ColumnOption
+	m := make(map[any]any)
+	rowIdx := 0
+	for rows.Next() {
+		rowIdx++
+		row, err := rows.Columns()
+		if err != nil {
+			fmt.Println(err)
+			return nil, err
+		}
+		if len(row) == 0 {
+			fmt.Println("empty row")
+			continue
+		}
+		// 标记行
+		column0 := strings.TrimSpace(row[0])
+		if len(columnOpts) == 0 && strings.HasPrefix(column0, "##var") {
+			// 列名
+			columnNames := row
+			fmt.Println("columnNames:")
+			fmt.Println(columnNames)
+			for columnIndex, columnName := range columnNames {
+				// 跳过注释列
+				if strings.HasPrefix(columnName, "#") {
+					continue
+				}
+				columnOpt := ConvertColumnOption(columnName)
+				if columnOpt == nil {
+					return nil, errors.New(fmt.Sprintf("columnName err %v", columnName))
+				}
+				columnOpt.ColumnIndex = columnIndex
+				columnOpts = append(columnOpts, columnOpt)
+				// 如果没有指定Key,则默认第一个非注释列为Key
+				if opt.KeyName == "" {
+					opt.KeyName = columnOpt.Name
+					keyFieldDesc = FindFieldDescriptor(msgDesc, opt.KeyName)
+					if keyFieldDesc != nil {
+						opt.KeyName = keyFieldDesc.GetJSONName() // 因为要导出为json格式,所以用json名
+					}
+					if opt.KeyType == "" && keyFieldDesc != nil {
+						opt.KeyType = GetKeyTypeString(keyFieldDesc)
+					}
+				}
+			}
+			fmt.Println(fmt.Sprintf("keyName:%v keyType:%v", opt.KeyName, opt.KeyType))
+			continue
+		}
+		// 跳过非数据行
+		if strings.HasPrefix(column0, "#") {
+			continue
+		}
+		rowValue := make(map[string]any)
+		for _, columnOpt := range columnOpts {
+			err = SetFieldValue(rowValue, msgDesc, columnOpt, row[columnOpt.ColumnIndex])
+			if err != nil {
+				fmt.Println(fmt.Sprintf("row%v err:%v", rowIdx, err))
+				continue
+			}
+		}
+		keyValue := rowValue[opt.KeyName]
+		if keyValue == nil {
+			fmt.Println(fmt.Sprintf("row%v key %s not found", rowIdx, opt.KeyName))
+			continue
+		}
+		m[keyValue] = rowValue
+		fmt.Println()
+	}
+	return m, nil
+}
+
+func convertToJsonMap[K IntOrString](m map[any]any) any {
+	jsonMap := make(map[K]any)
+	for k, v := range m {
+		jsonMap[k.(K)] = v
+	}
+	return jsonMap
 }
 
 type IntOrString interface {
@@ -162,18 +270,27 @@ func ConvertFieldValue(fieldDesc *desc.FieldDescriptor, cellValue string) any {
 	}
 	var fieldValue any
 	switch fieldDesc.GetType() {
-	case descriptorpb.FieldDescriptorProto_TYPE_INT32, descriptorpb.FieldDescriptorProto_TYPE_INT64,
-		descriptorpb.FieldDescriptorProto_TYPE_FIXED32, descriptorpb.FieldDescriptorProto_TYPE_FIXED64,
-		descriptorpb.FieldDescriptorProto_TYPE_SFIXED32, descriptorpb.FieldDescriptorProto_TYPE_SFIXED64,
-		descriptorpb.FieldDescriptorProto_TYPE_SINT32, descriptorpb.FieldDescriptorProto_TYPE_SINT64:
-		fieldValue = Atoi(cellValue)
+	case descriptorpb.FieldDescriptorProto_TYPE_INT32,
+		descriptorpb.FieldDescriptorProto_TYPE_FIXED32,
+		descriptorpb.FieldDescriptorProto_TYPE_SFIXED32,
+		descriptorpb.FieldDescriptorProto_TYPE_SINT32:
+		fieldValue = int32(Atoi(cellValue))
 
-	case descriptorpb.FieldDescriptorProto_TYPE_UINT32, descriptorpb.FieldDescriptorProto_TYPE_UINT64:
-		fieldValue = Atou(cellValue)
+	case descriptorpb.FieldDescriptorProto_TYPE_INT64,
+		descriptorpb.FieldDescriptorProto_TYPE_FIXED64,
+		descriptorpb.FieldDescriptorProto_TYPE_SFIXED64,
+		descriptorpb.FieldDescriptorProto_TYPE_SINT64:
+		fieldValue = int64(Atoi(cellValue))
+
+	case descriptorpb.FieldDescriptorProto_TYPE_UINT32:
+		fieldValue = uint32(Atou(cellValue))
+
+	case descriptorpb.FieldDescriptorProto_TYPE_UINT64:
+		fieldValue = uint64(Atou(cellValue))
 
 	case descriptorpb.FieldDescriptorProto_TYPE_FLOAT:
 		f, _ := strconv.ParseFloat(cellValue, 32)
-		fieldValue = f
+		fieldValue = float32(f)
 
 	case descriptorpb.FieldDescriptorProto_TYPE_DOUBLE:
 		f, _ := strconv.ParseFloat(cellValue, 64)

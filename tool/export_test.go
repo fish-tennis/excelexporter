@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/jhump/protoreflect/desc/protoparse"
-	"os"
 	"testing"
 )
 
@@ -17,16 +16,13 @@ func TestExport(t *testing.T) {
 	opt := &SheetOption{
 		SheetName:   "questcfg",
 		MessageName: "QuestCfg",
-		KeyName:     "CfgId",
+		//KeyName:        "CfgId",
+		ExportFileName: "./../data/json/questcfg.json",
 	}
-	m, err := ConvertSheetToJsonMap[int](excelFileName, opt)
-	t.Logf("m:%v,err:%v", m, err)
-	jsonData, err := json.Marshal(m)
+	err = ExportSheetToJson(excelFileName, opt)
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Logf("%v", string(jsonData))
-	os.WriteFile("test.json", jsonData, os.ModePerm)
 }
 
 func TestExportJson(t *testing.T) {

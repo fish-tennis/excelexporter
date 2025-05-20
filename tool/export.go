@@ -1,37 +1,56 @@
 package tool
 
 import (
+	"encoding/json"
 	"fmt"
-	"github.com/xuri/excelize/v2"
-	"strings"
+	"os"
 )
 
-func ExportFile(excelFileName string, sheetName string, protoMessageName string) error {
-	f, err := excelize.OpenFile(excelFileName)
+func ExportSheetToJson(excelFileName string, opt *SheetOption) error {
+	m, err := ConvertSheetToMap(excelFileName, opt)
 	if err != nil {
-		fmt.Println(err)
 		return err
 	}
-	defer func() {
-		// Close the spreadsheet.
-		if err := f.Close(); err != nil {
-			fmt.Println(err)
-		}
-	}()
-	rows, err := f.GetRows(sheetName)
+	switch opt.KeyType {
+	case "int":
+		err = exportToJsonFile[int](m, opt)
+	case "int8":
+		err = exportToJsonFile[int8](m, opt)
+	case "int16":
+		err = exportToJsonFile[int16](m, opt)
+	case "int32":
+		err = exportToJsonFile[int32](m, opt)
+	case "int64":
+		err = exportToJsonFile[int64](m, opt)
+	case "uint":
+		err = exportToJsonFile[uint](m, opt)
+		return err
+	case "uint8":
+		err = exportToJsonFile[uint8](m, opt)
+		return err
+	case "uint16":
+		err = exportToJsonFile[uint16](m, opt)
+		return err
+	case "uint32":
+		err = exportToJsonFile[uint32](m, opt)
+		return err
+	case "uint64":
+		err = exportToJsonFile[uint64](m, opt)
+		return err
+	case "string":
+		err = exportToJsonFile[string](m, opt)
+		return err
+	default:
+		fmt.Println(fmt.Sprintf("unsupported key type:%v", opt.KeyType))
+	}
+	return err
+}
+
+func exportToJsonFile[K IntOrString](m map[any]any, opt *SheetOption) error {
+	jsonMap := convertToJsonMap[K](m)
+	jsonData, err := json.Marshal(jsonMap)
 	if err != nil {
-		fmt.Println(err)
 		return err
 	}
-	for rowIdx, row := range rows {
-		if len(row) == 0 {
-			fmt.Println(fmt.Sprintf("empty row rowIdx:%v", rowIdx))
-			continue
-		}
-		col1 := strings.TrimSpace(row[0])
-		if strings.HasPrefix(col1, "##") {
-			continue
-		}
-	}
-	return nil
+	return os.WriteFile(opt.ExportFileName, jsonData, os.ModePerm)
 }

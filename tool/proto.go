@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"github.com/jhump/protoreflect/desc"
 	"github.com/jhump/protoreflect/desc/protoparse"
+	"google.golang.org/protobuf/types/descriptorpb"
 )
 
 var (
@@ -50,4 +51,34 @@ func FindFieldDescriptor(msgDesc *desc.MessageDescriptor, fieldName string) *des
 		fieldDesc = msgDesc.FindFieldByJSONName(fieldName)
 	}
 	return fieldDesc
+}
+
+// 返回值: int32 int64 uint32 uint64 string
+func GetKeyTypeString(fieldDesc *desc.FieldDescriptor) string {
+	switch fieldDesc.GetType() {
+	case descriptorpb.FieldDescriptorProto_TYPE_INT32,
+		descriptorpb.FieldDescriptorProto_TYPE_FIXED32,
+		descriptorpb.FieldDescriptorProto_TYPE_SFIXED32,
+		descriptorpb.FieldDescriptorProto_TYPE_SINT32:
+		return "int32"
+
+	case descriptorpb.FieldDescriptorProto_TYPE_INT64,
+		descriptorpb.FieldDescriptorProto_TYPE_FIXED64,
+		descriptorpb.FieldDescriptorProto_TYPE_SFIXED64,
+		descriptorpb.FieldDescriptorProto_TYPE_SINT64:
+		return "int64"
+
+	case descriptorpb.FieldDescriptorProto_TYPE_UINT32:
+		return "uint32"
+
+	case descriptorpb.FieldDescriptorProto_TYPE_UINT64:
+		return "uint64"
+
+	case descriptorpb.FieldDescriptorProto_TYPE_STRING:
+		return "string"
+
+	default:
+		fmt.Println(fmt.Sprintf("field type %v not support", fieldDesc.GetType()))
+	}
+	return ""
 }
