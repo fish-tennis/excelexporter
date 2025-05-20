@@ -42,3 +42,12 @@ func FindMessageDescriptor(messageName string) *desc.MessageDescriptor {
 	}
 	return nil
 }
+
+// 获取message的字段的结构描述
+func FindFieldDescriptor(msgDesc *desc.MessageDescriptor, fieldName string) *desc.FieldDescriptor {
+	fieldDesc := msgDesc.FindFieldByName(fieldName)
+	if fieldDesc == nil {
+		fieldDesc = msgDesc.FindFieldByJSONName(fieldName)
+	}
+	return fieldDesc
+}

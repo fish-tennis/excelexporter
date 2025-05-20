@@ -1,20 +1,44 @@
 package tool
 
 import (
+	"encoding/json"
 	"fmt"
 	"github.com/jhump/protoreflect/desc/protoparse"
+	"os"
 	"testing"
 )
 
 func TestExport(t *testing.T) {
-	err := ParseProtoFile([]string{"F:\\study\\src\\github.com\\fish-tennis\\gserver\\proto"}, "cfg.proto")
+	err := ParseProtoFile([]string{"./../proto"}, "cfg.proto")
 	if err != nil {
 		t.Fatal(err)
 	}
-	excelFileName := "F:\\study\\src\\github.com\\fish-tennis\\gserver\\excel\\questcfg.xlsx"
-	sheetName := "questcfg"
-	m, err := ConvertSheetToMap(excelFileName, sheetName, "QuestCfg")
+	excelFileName := "./../data/excel/questcfg.xlsx"
+	opt := &SheetOption{
+		SheetName:   "questcfg",
+		MessageName: "QuestCfg",
+		KeyName:     "CfgId",
+	}
+	m, err := ConvertSheetToJsonMap[int](excelFileName, opt)
 	t.Logf("m:%v,err:%v", m, err)
+	jsonData, err := json.Marshal(m)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Logf("%v", string(jsonData))
+	os.WriteFile("test.json", jsonData, os.ModePerm)
+}
+
+func TestExportJson(t *testing.T) {
+	m := make(map[any]any)
+	for i := 0; i < 10; i++ {
+		m[i] = fmt.Sprintf("str%v", i)
+	}
+	jsonData, err := json.Marshal(m)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Logf("%v", string(jsonData))
 }
 
 func TestProtoLoad(t *testing.T) {
