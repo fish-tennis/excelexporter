@@ -160,8 +160,13 @@ func ConvertSheetToMap(excelFile *excelize.File, opt *SheetOption) (map[any]any,
 		}
 		rowValue := make(map[string]any)
 		for _, columnOpt := range columnOpts {
+			fieldDesc := FindFieldDescriptor(msgDesc, columnOpt.Name)
+			if fieldDesc == nil {
+				fmt.Println(fmt.Sprintf("row%v %s not found", rowIdx, columnOpt.Name))
+				continue
+			}
 			// TODO: format扩展 如json
-			err = SetFieldValue(rowValue, msgDesc, columnOpt, row[columnOpt.ColumnIndex])
+			err = SetFieldValue(rowValue, fieldDesc, columnOpt, row[columnOpt.ColumnIndex])
 			if err != nil {
 				fmt.Println(fmt.Sprintf("row%v err:%v", rowIdx, err))
 				continue
@@ -225,11 +230,7 @@ func convertToJsonMapByKeyType(m map[any]any, keyType string) any {
 	return m
 }
 
-func SetFieldValue(m map[string]any, msgDesc *desc.MessageDescriptor, opt *ColumnOption, cellValue string) error {
-	fieldDesc := FindFieldDescriptor(msgDesc, opt.Name)
-	if fieldDesc == nil {
-		return fmt.Errorf("field %s not found", opt.Name)
-	}
+func SetFieldValue(m map[string]any, fieldDesc *desc.FieldDescriptor, opt *ColumnOption, cellValue string) error {
 	var fieldValue any
 	// [] or map
 	if fieldDesc.IsRepeated() {
@@ -351,10 +352,7 @@ func ConvertFieldValue(fieldDesc *desc.FieldDescriptor, columnOption *ColumnOpti
 					break
 				}
 				subFieldDesc := subMsgDesc.GetFields()[fieldIndex]
-				subFiledValue := ConvertFieldValue(subFieldDesc, columnOption, fieldStr)
-				if subFiledValue != nil {
-					subMsgValue[subFieldDesc.GetJSONName()] = subFiledValue
-				}
+				SetFieldValue(subMsgValue, subFieldDesc, columnOption, fieldStr)
 			}
 		} else if columnOption.IsFullFieldName() {
 			// 默认使用字段名模式,该模块填写略复杂,但是兼容性好一些 如CfgId_2#Args_1
@@ -365,10 +363,7 @@ func ConvertFieldValue(fieldDesc *desc.FieldDescriptor, columnOption *ColumnOpti
 					fmt.Println(fmt.Sprintf("field %s not found", kv.Key))
 					continue
 				}
-				subFiledValue := ConvertFieldValue(subFieldDesc, columnOption, kv.Value)
-				if subFiledValue != nil {
-					subMsgValue[subFieldDesc.GetJSONName()] = subFiledValue
-				}
+				SetFieldValue(subMsgValue, subFieldDesc, columnOption, kv.Value)
 			}
 		} else {
 			// #Field=Field1_Field2_Field3
@@ -383,10 +378,7 @@ func ConvertFieldValue(fieldDesc *desc.FieldDescriptor, columnOption *ColumnOpti
 					fmt.Println(fmt.Sprintf("field %s not found", subFieldName))
 					continue
 				}
-				subFiledValue := ConvertFieldValue(subFieldDesc, columnOption, fieldStr)
-				if subFiledValue != nil {
-					subMsgValue[subFieldDesc.GetJSONName()] = subFiledValue
-				}
+				SetFieldValue(subMsgValue, subFieldDesc, columnOption, fieldStr)
 			}
 		}
 		if len(subMsgValue) == 0 {
