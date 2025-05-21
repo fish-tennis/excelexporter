@@ -53,25 +53,50 @@ func FindFieldDescriptor(msgDesc *desc.MessageDescriptor, fieldName string) *des
 	return fieldDesc
 }
 
+func IsRepeatedField(fieldDesc *desc.FieldDescriptor) bool {
+	return fieldDesc.IsRepeated()
+}
+
+func IsMapField(fieldDesc *desc.FieldDescriptor) bool {
+	// NOTE: fieldDesc.IsMap() 无法判断map类型
+	if fieldDesc.GetMessageType() == nil {
+		return false
+	}
+	return fieldDesc.GetMessageType().IsMapEntry()
+}
+
 // 返回值: int32 int64 uint32 uint64 string
 func GetKeyTypeString(fieldDesc *desc.FieldDescriptor) string {
+	//	+-------------------------+-----------+
+	//	|       Declared Type     |  Go Type  |
+	//	+-------------------------+-----------+
+	//	| int32, sint32, sfixed32 | int32     |
+	//	| int64, sint64, sfixed64 | int64     |
+	//	| uint32, fixed32         | uint32    |
+	//	| uint64, fixed64         | uint64    |
+	//	| float                   | float32   |
+	//	| double                  | double32  |
+	//	| bool                    | bool      |
+	//	| string                  | string    |
+	//	| bytes                   | []byte    |
+	//	+-------------------------+-----------+
 	switch fieldDesc.GetType() {
 	case descriptorpb.FieldDescriptorProto_TYPE_INT32,
-		descriptorpb.FieldDescriptorProto_TYPE_FIXED32,
 		descriptorpb.FieldDescriptorProto_TYPE_SFIXED32,
 		descriptorpb.FieldDescriptorProto_TYPE_SINT32:
 		return "int32"
 
 	case descriptorpb.FieldDescriptorProto_TYPE_INT64,
-		descriptorpb.FieldDescriptorProto_TYPE_FIXED64,
 		descriptorpb.FieldDescriptorProto_TYPE_SFIXED64,
 		descriptorpb.FieldDescriptorProto_TYPE_SINT64:
 		return "int64"
 
-	case descriptorpb.FieldDescriptorProto_TYPE_UINT32:
+	case descriptorpb.FieldDescriptorProto_TYPE_UINT32,
+		descriptorpb.FieldDescriptorProto_TYPE_FIXED32:
 		return "uint32"
 
-	case descriptorpb.FieldDescriptorProto_TYPE_UINT64:
+	case descriptorpb.FieldDescriptorProto_TYPE_UINT64,
+		descriptorpb.FieldDescriptorProto_TYPE_FIXED64:
 		return "uint64"
 
 	case descriptorpb.FieldDescriptorProto_TYPE_STRING:

@@ -13,20 +13,49 @@ import (
 type SheetOption struct {
 	SheetName      string
 	MessageName    string
-	KeyName        string
+	KeyName        string // 填空直接使用第一个非注释列作为key名
 	KeyType        string // int int32 int64 uint uint32 uint64 string
-	ExportFileName string
+	ExportFileName string // 填空直接使用SheetName作为文件名
 }
 
 type ColumnOption struct {
 	Name        string
-	Format      string
 	ColumnIndex int
+	// 特殊的格式 如format=json
+	// TODO:待扩展 一些复杂结构的数据在excel里编辑是很麻烦的,这时候可以考虑直接使用json格式
+	Format string
+	// 字段是message,对应的字段名,如#Field=Field1_Field2_Field3
+	// no和full是特定格式
+	//	---------------------------------------------
+	//	| Item1     | Item2           | Item3        |
+	//	| #Field=no | #Field=Id_Count | #Field=full  |
+	//	---------------------------------------------
+	//	| 1_3       | 1_3             | Id_1#Count_3 |
+	//	---------------------------------------------
+	FieldNames []string
+}
+
+// 简洁模式,不需要字段名(#Field=no)
+func (c *ColumnOption) IsNoFieldName() bool {
+	return len(c.FieldNames) == 1 && c.FieldNames[0] == "no"
+}
+
+// #Field=full 每一行都需要填上字段名
+func (c *ColumnOption) IsFullFieldName() bool {
+	return len(c.FieldNames) == 1 && c.FieldNames[0] == "full"
 }
 
 // ColumnName#format=json#arg=value
 func ConvertColumnOption(cell string) *ColumnOption {
 	cell = strings.TrimSpace(cell)
+	cell = strings.ReplaceAll(cell, "\n", "")
+	// 支持换行,如:
+	//	---------------------------------------------
+	//	| Item1     | Item2           | Item3        |
+	//	| #Field=no | #Field=Id_Count | #Field=full  |
+	//	---------------------------------------------
+	//	| 1_3       | 1_3             | Id_1#Count_3 |
+	//	---------------------------------------------
 	nameAndArgs := strings.Split(cell, "#")
 	if len(nameAndArgs) == 0 {
 		return nil
@@ -37,9 +66,16 @@ func ConvertColumnOption(cell string) *ColumnOption {
 	for i := 1; i < len(nameAndArgs); i++ {
 		arg := nameAndArgs[i]
 		kv := strings.Split(arg, "=")
-		if len(kv) == 2 {
-			switch kv[0] {
-			case "format":
+		if len(kv) == 0 {
+			continue
+		}
+		switch strings.ToLower(kv[0]) {
+		case "field":
+			if len(kv) == 2 {
+				opt.FieldNames = strings.Split(kv[1], "_")
+			}
+		case "format":
+			if len(kv) == 2 {
 				opt.Format = kv[1]
 			}
 		}
@@ -47,7 +83,7 @@ func ConvertColumnOption(cell string) *ColumnOption {
 	return opt
 }
 
-func ConvertSheetToMap(excelFileName string, opt *SheetOption) (map[any]any, error) {
+func ConvertSheetToMap(excelFile *excelize.File, opt *SheetOption) (map[any]any, error) {
 	msgDesc := FindMessageDescriptor(opt.MessageName)
 	if msgDesc == nil {
 		return nil, fmt.Errorf("message %s not found", opt.MessageName)
@@ -59,12 +95,7 @@ func ConvertSheetToMap(excelFileName string, opt *SheetOption) (map[any]any, err
 	if opt.KeyType == "" && keyFieldDesc != nil {
 		opt.KeyType = GetKeyTypeString(keyFieldDesc)
 	}
-	f, err := excelize.OpenFile(excelFileName)
-	if err != nil {
-		fmt.Println(err)
-		return nil, err
-	}
-	rows, err := f.Rows(opt.SheetName)
+	rows, err := excelFile.Rows(opt.SheetName)
 	if err != nil {
 		fmt.Println(err)
 		return nil, err
@@ -76,7 +107,7 @@ func ConvertSheetToMap(excelFileName string, opt *SheetOption) (map[any]any, err
 	}()
 	var columnOpts []*ColumnOption
 	m := make(map[any]any)
-	rowIdx := 0
+	rowIdx := -1
 	for rows.Next() {
 		rowIdx++
 		row, err := rows.Columns()
@@ -90,14 +121,16 @@ func ConvertSheetToMap(excelFileName string, opt *SheetOption) (map[any]any, err
 		}
 		// 标记行
 		column0 := strings.TrimSpace(row[0])
-		if len(columnOpts) == 0 && strings.HasPrefix(column0, "##var") {
+		// 特殊标记的##var的列或者第一行非#开始的行就是列名定义行
+		if len(columnOpts) == 0 && isColumnNameDefineRow(column0) {
 			// 列名
 			columnNames := row
 			fmt.Println("columnNames:")
 			fmt.Println(columnNames)
 			for columnIndex, columnName := range columnNames {
+				columnName = strings.TrimSpace(columnName)
 				// 跳过注释列
-				if strings.HasPrefix(columnName, "#") {
+				if columnName == "" || strings.HasPrefix(columnName, "#") {
 					continue
 				}
 				columnOpt := ConvertColumnOption(columnName)
@@ -127,6 +160,7 @@ func ConvertSheetToMap(excelFileName string, opt *SheetOption) (map[any]any, err
 		}
 		rowValue := make(map[string]any)
 		for _, columnOpt := range columnOpts {
+			// TODO: format扩展 如json
 			err = SetFieldValue(rowValue, msgDesc, columnOpt, row[columnOpt.ColumnIndex])
 			if err != nil {
 				fmt.Println(fmt.Sprintf("row%v err:%v", rowIdx, err))
@@ -144,6 +178,16 @@ func ConvertSheetToMap(excelFileName string, opt *SheetOption) (map[any]any, err
 	return m, nil
 }
 
+func isColumnNameDefineRow(column0 string) bool {
+	if strings.HasPrefix(column0, "##var") {
+		return true
+	}
+	if strings.HasPrefix(column0, "#") {
+		return false
+	}
+	return true
+}
+
 func convertToJsonMap[K IntOrString](m map[any]any) any {
 	jsonMap := make(map[K]any)
 	for k, v := range m {
@@ -152,87 +196,33 @@ func convertToJsonMap[K IntOrString](m map[any]any) any {
 	return jsonMap
 }
 
-type IntOrString interface {
-	~int | ~int8 | ~int16 | ~int32 | ~int64 |
-		~uint | ~uint8 | ~uint16 | ~uint32 | ~uint64 | ~string
-}
-
-// 把excel的一个工作簿里的数据转换成json格式的map
-func ConvertSheetToJsonMap[K IntOrString](excelFileName string, opt *SheetOption) (map[K]any, error) {
-	msgDesc := FindMessageDescriptor(opt.MessageName)
-	if msgDesc == nil {
-		return nil, fmt.Errorf("message %s not found", opt.MessageName)
+func convertToJsonMapByKeyType(m map[any]any, keyType string) any {
+	switch keyType {
+	case "int":
+		return convertToJsonMap[int](m)
+	case "int8":
+		return convertToJsonMap[int8](m)
+	case "int16":
+		return convertToJsonMap[int16](m)
+	case "int32":
+		return convertToJsonMap[int32](m)
+	case "int64":
+		return convertToJsonMap[int64](m)
+	case "uint":
+		return convertToJsonMap[uint](m)
+	case "uint8":
+		return convertToJsonMap[uint8](m)
+	case "uint16":
+		return convertToJsonMap[uint16](m)
+	case "uint32":
+		return convertToJsonMap[uint32](m)
+	case "uint64":
+		return convertToJsonMap[uint64](m)
+	case "string":
+		return convertToJsonMap[string](m)
 	}
-	keyFieldDesc := FindFieldDescriptor(msgDesc, opt.KeyName)
-	if keyFieldDesc != nil {
-		opt.KeyName = keyFieldDesc.GetJSONName() // 因为要导出为json格式,所以用json名
-	}
-	f, err := excelize.OpenFile(excelFileName)
-	if err != nil {
-		fmt.Println(err)
-		return nil, err
-	}
-	rows, err := f.Rows(opt.SheetName)
-	if err != nil {
-		fmt.Println(err)
-		return nil, err
-	}
-	defer func() {
-		if err = rows.Close(); err != nil {
-			fmt.Println(err)
-		}
-	}()
-	var columnNames []string
-	m := make(map[K]any)
-	rowIdx := 0
-	for rows.Next() {
-		rowIdx++
-		row, err := rows.Columns()
-		if err != nil {
-			fmt.Println(err)
-			return nil, err
-		}
-		if len(row) == 0 {
-			fmt.Println("empty row")
-			continue
-		}
-		// 标记行
-		column0 := strings.TrimSpace(row[0])
-		if strings.HasPrefix(column0, "##var") {
-			// 列名
-			columnNames = row
-			fmt.Println("columnNames:")
-			fmt.Println(columnNames)
-			continue
-		}
-		// 跳过非数据行
-		if strings.HasPrefix(column0, "#") {
-			continue
-		}
-		rowValue := make(map[string]any)
-		for colIdx, colCell := range row {
-			columnName := columnNames[colIdx]
-			// 跳过注释列
-			if strings.HasPrefix(strings.TrimSpace(columnName), "#") {
-				continue
-			}
-			// ColumnName#format=json#arg=value
-			columnOpt := ConvertColumnOption(columnName)
-			err = SetFieldValue(rowValue, msgDesc, columnOpt, colCell)
-			if err != nil {
-				fmt.Println(fmt.Sprintf("row%v err:%v", rowIdx, err))
-				continue
-			}
-		}
-		keyValue := rowValue[opt.KeyName]
-		if keyValue == nil {
-			fmt.Println(fmt.Sprintf("row%v key %s not found", rowIdx, opt.KeyName))
-			continue
-		}
-		m[keyValue.(K)] = rowValue
-		fmt.Println()
-	}
-	return m, nil
+	fmt.Println(fmt.Sprintf("convertToJsonMapByKeyType err keyType:%v", keyType))
+	return m
 }
 
 func SetFieldValue(m map[string]any, msgDesc *desc.MessageDescriptor, opt *ColumnOption, cellValue string) error {
@@ -241,20 +231,52 @@ func SetFieldValue(m map[string]any, msgDesc *desc.MessageDescriptor, opt *Colum
 		return fmt.Errorf("field %s not found", opt.Name)
 	}
 	var fieldValue any
+	// [] or map
 	if fieldDesc.IsRepeated() {
-		var repeatedElems []any
-		elemValues := strings.Split(cellValue, ";")
-		for _, elemValue := range elemValues {
-			elem := ConvertFieldValue(fieldDesc, elemValue)
-			if elem != nil {
-				repeatedElems = append(repeatedElems, elem)
+		// map字段
+		if fieldDesc.IsMap() {
+			mapField := make(map[any]any)
+			keyType := fieldDesc.GetMessageType().FindFieldByNumber(1)
+			valueType := fieldDesc.GetMessageType().FindFieldByNumber(2)
+			// map字段,同时支持换行和;
+			lines := strings.Split(cellValue, "\n")
+			for _, line := range lines {
+				// k1_v1;k2_v2
+				pairValues := strings.Split(line, ";")
+				for _, pairValue := range pairValues {
+					kv := strings.SplitN(pairValue, "_", 2)
+					if len(kv) != 2 {
+						continue
+					}
+					k := ConvertFieldValue(keyType, opt, kv[0])
+					v := ConvertFieldValue(valueType, opt, kv[1])
+					mapField[k] = v
+				}
+			}
+			if len(mapField) > 0 {
+				fieldValue = convertToJsonMapByKeyType(mapField, GetKeyTypeString(keyType))
+			}
+		} else {
+			// repeated字段
+			var repeatedElems []any
+			// repeated字段,同时支持换行和;
+			lines := strings.Split(cellValue, "\n")
+			for _, line := range lines {
+				elemValues := strings.Split(line, ";")
+				for _, elemValue := range elemValues {
+					elem := ConvertFieldValue(fieldDesc, opt, elemValue)
+					if elem != nil {
+						repeatedElems = append(repeatedElems, elem)
+					}
+				}
+			}
+			if len(repeatedElems) > 0 {
+				fieldValue = repeatedElems
 			}
 		}
-		if len(repeatedElems) > 0 {
-			fieldValue = repeatedElems
-		}
 	} else {
-		fieldValue = ConvertFieldValue(fieldDesc, cellValue)
+		// 普通字段
+		fieldValue = ConvertFieldValue(fieldDesc, opt, cellValue)
 	}
 	if fieldValue == nil {
 		return nil
@@ -264,28 +286,39 @@ func SetFieldValue(m map[string]any, msgDesc *desc.MessageDescriptor, opt *Colum
 	return nil
 }
 
-func ConvertFieldValue(fieldDesc *desc.FieldDescriptor, cellValue string) any {
+func ConvertFieldValue(fieldDesc *desc.FieldDescriptor, columnOption *ColumnOption, cellValue string) any {
 	if len(cellValue) == 0 {
 		return nil
 	}
+	//	+-------------------------+-----------+
+	//	|       Declared Type     |  Go Type  |
+	//	+-------------------------+-----------+
+	//	| int32, sint32, sfixed32 | int32     |
+	//	| int64, sint64, sfixed64 | int64     |
+	//	| uint32, fixed32         | uint32    |
+	//	| uint64, fixed64         | uint64    |
+	//	| float                   | float32   |
+	//	| double                  | double32  |
+	//	| bool                    | bool      |
+	//	| string                  | string    |
+	//	| bytes                   | []byte    |
+	//	+-------------------------+-----------+
 	var fieldValue any
 	switch fieldDesc.GetType() {
 	case descriptorpb.FieldDescriptorProto_TYPE_INT32,
-		descriptorpb.FieldDescriptorProto_TYPE_FIXED32,
 		descriptorpb.FieldDescriptorProto_TYPE_SFIXED32,
 		descriptorpb.FieldDescriptorProto_TYPE_SINT32:
 		fieldValue = int32(Atoi(cellValue))
 
 	case descriptorpb.FieldDescriptorProto_TYPE_INT64,
-		descriptorpb.FieldDescriptorProto_TYPE_FIXED64,
 		descriptorpb.FieldDescriptorProto_TYPE_SFIXED64,
 		descriptorpb.FieldDescriptorProto_TYPE_SINT64:
 		fieldValue = int64(Atoi(cellValue))
 
-	case descriptorpb.FieldDescriptorProto_TYPE_UINT32:
+	case descriptorpb.FieldDescriptorProto_TYPE_UINT32, descriptorpb.FieldDescriptorProto_TYPE_FIXED32:
 		fieldValue = uint32(Atou(cellValue))
 
-	case descriptorpb.FieldDescriptorProto_TYPE_UINT64:
+	case descriptorpb.FieldDescriptorProto_TYPE_UINT64, descriptorpb.FieldDescriptorProto_TYPE_FIXED64:
 		fieldValue = uint64(Atou(cellValue))
 
 	case descriptorpb.FieldDescriptorProto_TYPE_FLOAT:
@@ -309,16 +342,51 @@ func ConvertFieldValue(fieldDesc *desc.FieldDescriptor, cellValue string) any {
 		// 嵌套结构,递归解析
 		subMsgValue := make(map[string]any)
 		subMsgDesc := fieldDesc.GetMessageType()
-		kvs := convertPairString(nil, cellValue, "#", "_")
-		for _, kv := range kvs {
-			subFieldDesc := FindFieldDescriptor(subMsgDesc, kv.Key)
-			if subFieldDesc == nil {
-				fmt.Println(fmt.Sprintf("field %s not found", kv.Key))
-				continue
+		// todo: format扩展 如json
+		// 简洁模式,不需要字段名,不支持多层结构 如1_2_5
+		if columnOption.IsNoFieldName() {
+			fieldValues := strings.Split(cellValue, "_")
+			for fieldIndex, fieldStr := range fieldValues {
+				if fieldIndex >= len(subMsgDesc.GetFields()) {
+					break
+				}
+				subFieldDesc := subMsgDesc.GetFields()[fieldIndex]
+				subFiledValue := ConvertFieldValue(subFieldDesc, columnOption, fieldStr)
+				if subFiledValue != nil {
+					subMsgValue[subFieldDesc.GetJSONName()] = subFiledValue
+				}
 			}
-			subFiledValue := ConvertFieldValue(subFieldDesc, kv.Value)
-			if subFiledValue != nil {
-				subMsgValue[subFieldDesc.GetJSONName()] = subFiledValue
+		} else if columnOption.IsFullFieldName() {
+			// 默认使用字段名模式,该模块填写略复杂,但是兼容性好一些 如CfgId_2#Args_1
+			kvs := convertPairString(nil, cellValue, "#", "_")
+			for _, kv := range kvs {
+				subFieldDesc := FindFieldDescriptor(subMsgDesc, kv.Key)
+				if subFieldDesc == nil {
+					fmt.Println(fmt.Sprintf("field %s not found", kv.Key))
+					continue
+				}
+				subFiledValue := ConvertFieldValue(subFieldDesc, columnOption, kv.Value)
+				if subFiledValue != nil {
+					subMsgValue[subFieldDesc.GetJSONName()] = subFiledValue
+				}
+			}
+		} else {
+			// #Field=Field1_Field2_Field3
+			fieldValues := strings.Split(cellValue, "_")
+			for fieldIndex, fieldStr := range fieldValues {
+				if fieldIndex >= len(columnOption.FieldNames) {
+					break
+				}
+				subFieldName := columnOption.FieldNames[fieldIndex]
+				subFieldDesc := FindFieldDescriptor(subMsgDesc, subFieldName)
+				if subFieldDesc == nil {
+					fmt.Println(fmt.Sprintf("field %s not found", subFieldName))
+					continue
+				}
+				subFiledValue := ConvertFieldValue(subFieldDesc, columnOption, fieldStr)
+				if subFiledValue != nil {
+					subMsgValue[subFieldDesc.GetJSONName()] = subFiledValue
+				}
 			}
 		}
 		if len(subMsgValue) == 0 {

@@ -3,7 +3,6 @@ package tool
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/jhump/protoreflect/desc/protoparse"
 	"testing"
 )
 
@@ -12,14 +11,18 @@ func TestExport(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	excelFileName := "./../data/excel/questcfg.xlsx"
-	opt := &SheetOption{
-		SheetName:   "questcfg",
-		MessageName: "QuestCfg",
-		//KeyName:        "CfgId",
-		ExportFileName: "./../data/json/questcfg.json",
+	exportOption := &ExportOption{
+		ImportPath: "./../data/excel/",
+		ExportPath: "./../data/json/",
 	}
-	err = ExportSheetToJson(excelFileName, opt)
+	excelFileName := "questcfg.xlsx"
+	opts := []*SheetOption{
+		{
+			SheetName:   "questcfg",
+			MessageName: "QuestCfg",
+		},
+	}
+	err = ExportExcelToJson(exportOption, excelFileName, opts)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -38,37 +41,31 @@ func TestExportJson(t *testing.T) {
 }
 
 func TestProtoLoad(t *testing.T) {
-	parser := protoparse.Parser{
-		ImportPaths: []string{"E:\\work\\netmessage"}, // 设置 .proto 文件的导入路径
-	}
-
-	// 解析指定的 .proto 文件
-	fds, err := parser.ParseFiles("conf.proto")
+	err := ParseProtoFile([]string{"./../proto"}, "cfg.proto")
 	if err != nil {
-		panic(err)
+		t.Fatal(err)
 	}
-
-	//// 遍历文件中的消息定义
-	//for _, fd := range fds {
-	//	for _, msg := range fd.GetMessageTypes() {
-	//		fmt.Println("Message Name:", msg.GetName())
-	//		for _, field := range msg.GetFields() {
-	//			fmt.Printf("  Field: %s, Type: %v\n", field.GetName(), field.GetType())
-	//		}
-	//	}
-	//}
-
-	fd := fds[0]
-	msg := fd.FindMessage("QuestCfg")
-	for _, field := range msg.GetFields() {
-		fmt.Printf("  Field: %s,%s,%s,%s Type: %v\n",
+	msg := FindMessageDescriptor("QuestCfg")
+	for idx, field := range msg.GetFields() {
+		typeStr := field.GetType().String()
+		if field.IsRepeated() {
+			if field.IsMap() {
+				keyType := field.GetMapKeyType()
+				valueType := field.GetMapValueType()
+				typeStr = fmt.Sprintf("map[%v]%v", keyType.GetType(), valueType.GetType())
+			} else {
+				typeStr = fmt.Sprintf("[]%v", field.GetType())
+			}
+		} else if field.IsExtension() {
+			typeStr = "ext"
+		}
+		fmt.Printf("  Field%v: %s,%s,%s,%s Type: %v\n",
+			idx,
 			field.GetName(),
 			field.GetFullyQualifiedName(),
 			field.GetJSONName(),
 			field.GetFullyQualifiedJSONName(),
-			field.GetType(),
+			typeStr,
 		)
 	}
-	newMsg := msg.AsDescriptorProto().ProtoReflect().New()
-	t.Logf("newMsg:%v", newMsg)
 }
