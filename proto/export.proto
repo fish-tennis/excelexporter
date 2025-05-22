@@ -1,0 +1,15 @@
+syntax = "proto3";
+
+option go_package = "./pb";
+
+package gserver;
+
+// excel导出设置
+message ExportCfg {
+  string Excel = 1; // excel文件名
+  string Sheet = 2; // sheet名
+  string Message = 3; // proto里定义的结构名
+  string Key = 4; // 不填就默认以sheet的第一列作为key
+  string MgrType = 5; // 导出的数据管理类类型,map slice object
+  string CodeComment = 6; // 导出到代码里的注释
+}

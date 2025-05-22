@@ -1,6 +1,7 @@
 package tool
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"github.com/jhump/protoreflect/desc"
@@ -22,7 +23,7 @@ type ColumnOption struct {
 	Name        string
 	ColumnIndex int
 	// 特殊的格式 如format=json
-	// TODO:待扩展 一些复杂结构的数据在excel里编辑是很麻烦的,这时候可以考虑直接使用json格式
+	// 些复杂结构的数据在excel里编辑是很麻烦的,这时候可以考虑直接使用json格式
 	Format string
 	// 字段是message,对应的字段名,如#Field=Field1_Field2_Field3
 	// no和full是特定格式
@@ -162,14 +163,26 @@ func ConvertSheetToMap(excelFile *excelize.File, opt *SheetOption) (map[any]any,
 		for _, columnOpt := range columnOpts {
 			fieldDesc := FindFieldDescriptor(msgDesc, columnOpt.Name)
 			if fieldDesc == nil {
-				fmt.Println(fmt.Sprintf("row%v %s not found", rowIdx, columnOpt.Name))
+				fmt.Println(fmt.Sprintf("FieldNameNotFound row%v name:%s", rowIdx, columnOpt.Name))
 				continue
 			}
-			// TODO: format扩展 如json
-			err = SetFieldValue(rowValue, fieldDesc, columnOpt, row[columnOpt.ColumnIndex])
-			if err != nil {
-				fmt.Println(fmt.Sprintf("row%v err:%v", rowIdx, err))
-				continue
+			if columnOpt.ColumnIndex >= len(row) {
+				continue // 跳过空的cell
+			}
+			cell := strings.TrimSpace(row[columnOpt.ColumnIndex])
+			// format扩展 json
+			if columnOpt.Format == "json" {
+				err = SetFieldValueJson(rowValue, fieldDesc, columnOpt, cell)
+				if err != nil {
+					fmt.Println(fmt.Sprintf("SetFieldValueJsonErr row%v err:%v", rowIdx, err))
+					continue
+				}
+			} else {
+				err = SetFieldValue(rowValue, fieldDesc, columnOpt, cell)
+				if err != nil {
+					fmt.Println(fmt.Sprintf("SetFieldValueErr row%v err:%v", rowIdx, err))
+					continue
+				}
 			}
 		}
 		keyValue := rowValue[opt.KeyName]
@@ -283,7 +296,34 @@ func SetFieldValue(m map[string]any, fieldDesc *desc.FieldDescriptor, opt *Colum
 		return nil
 	}
 	m[fieldDesc.GetJSONName()] = fieldValue
-	fmt.Println(fmt.Sprintf("SetFieldValue %v:%v", fieldDesc.GetJSONName(), fieldValue))
+	//fmt.Println(fmt.Sprintf("SetFieldValue %v:%v", fieldDesc.GetJSONName(), fieldValue))
+	return nil
+}
+
+func SetFieldValueJson(m map[string]any, fieldDesc *desc.FieldDescriptor, opt *ColumnOption, cellValue string) error {
+	if len(cellValue) == 0 {
+		return nil
+	}
+	var jsonValue any
+	// [] or map
+	if fieldDesc.IsRepeated() {
+		// map字段
+		if fieldDesc.IsMap() {
+			jsonValue = make(map[string]any)
+		} else {
+			// []
+			jsonValue = make([]any, 0)
+		}
+	} else {
+		jsonValue = make(map[string]any)
+	}
+	err := json.Unmarshal([]byte(cellValue), &jsonValue)
+	if err != nil {
+		fmt.Println(fmt.Sprintf("SetFieldValueJsonErr err:%v", err))
+		return err
+	}
+	m[fieldDesc.GetJSONName()] = jsonValue
+	//fmt.Println(fmt.Sprintf("SetFieldValueJson %v:%v", fieldDesc.GetJSONName(), jsonValue))
 	return nil
 }
 
@@ -343,7 +383,6 @@ func ConvertFieldValue(fieldDesc *desc.FieldDescriptor, columnOption *ColumnOpti
 		// 嵌套结构,递归解析
 		subMsgValue := make(map[string]any)
 		subMsgDesc := fieldDesc.GetMessageType()
-		// todo: format扩展 如json
 		// 简洁模式,不需要字段名,不支持多层结构 如1_2_5
 		if columnOption.IsNoFieldName() {
 			fieldValues := strings.Split(cellValue, "_")

@@ -8,13 +8,79 @@ import (
 )
 
 type ExportOption struct {
-	ImportPath string // 导入目录(excel所在目录)
-	ExportPath string // 导出目录
-	MultiLine  bool   // repeated字段使用多行编辑
+	DataImportPath string // Excel导入目录(excel所在目录)
+	DataExportPath string // 数据导出目录
+
+	CodeTemplatePath string // 代码模板目录
+	CodeExportPath   string // 代码导出目录
+}
+
+// 从一个总表导出所有的配置表
+func ExportAll(exportOption *ExportOption, exportExcelFileName, exportSheetName string) error {
+	f, err := excelize.OpenFile(exportOption.DataImportPath + exportExcelFileName)
+	if err != nil {
+		fmt.Println(err)
+		return err
+	}
+	defer func() {
+		if err = f.Close(); err != nil {
+			fmt.Println(err)
+		}
+	}()
+	exportSheetOption := &SheetOption{
+		SheetName:   exportSheetName,
+		MessageName: "ExportCfg",
+		KeyName:     "Sheet",
+	}
+	m, err := ConvertSheetToMap(f, exportSheetOption)
+	if err != nil {
+		fmt.Println(fmt.Sprintf("ExportAllErr err:%v", err))
+		return err
+	}
+	getMapValueFn := func(strMap map[string]any, key, defaultValue string) string {
+		if v, ok := strMap[key]; ok {
+			return v.(string)
+		}
+		return defaultValue
+	}
+	generateInfo := &GenerateInfo{
+		PackageName: "cfg",
+		TemplateFiles: []string{
+			exportOption.CodeTemplatePath + "data_mgr.go.template",
+		},
+	}
+	for k, v := range m {
+		sheetName := k.(string)
+		exportCfg := v.(map[string]any)
+		sheetOption := &SheetOption{
+			SheetName:   sheetName,
+			MessageName: getMapValueFn(exportCfg, "Message", sheetName),
+			KeyName:     getMapValueFn(exportCfg, "KeyName", ""),
+			KeyType:     getMapValueFn(exportCfg, "Key", ""),
+		}
+		excelFileName := getMapValueFn(exportCfg, "Excel", "")
+		err = ExportExcelToJson(exportOption, excelFileName, []*SheetOption{sheetOption})
+		if err != nil {
+			fmt.Println(fmt.Sprintf("ExportAllErr excel:%v sheet:%v err:%v", excelFileName, sheetName, err))
+			return err
+		}
+		generateInfo.AddDataMgrInfo(&DataMgrInfo{
+			Name:    sheetOption.MessageName,
+			MgrType: getMapValueFn(exportCfg, "MgrType", "map"),
+			Comment: getMapValueFn(exportCfg, "Comment", ""),
+		})
+	}
+	// 生成代码
+	err = GenerateCode(generateInfo, exportOption.CodeExportPath)
+	if err != nil {
+		fmt.Println(fmt.Sprintf("GenerateCodeErr err:%v", err))
+		return err
+	}
+	return nil
 }
 
 func ExportExcelToJson(exportOption *ExportOption, excelFileName string, sheetOptions []*SheetOption) error {
-	f, err := excelize.OpenFile(exportOption.ImportPath + excelFileName)
+	f, err := excelize.OpenFile(exportOption.DataImportPath + excelFileName)
 	if err != nil {
 		fmt.Println(err)
 		return err
@@ -46,7 +112,7 @@ func ExportSheetToJson(exportOption *ExportOption, excelFile *excelize.File, she
 	if sheetOption.ExportFileName == "" {
 		sheetOption.ExportFileName = fmt.Sprintf("%s.json", sheetOption.SheetName)
 	}
-	return os.WriteFile(exportOption.ExportPath+sheetOption.ExportFileName, jsonData, os.ModePerm)
+	return os.WriteFile(exportOption.DataExportPath+sheetOption.ExportFileName, jsonData, os.ModePerm)
 }
 
 type IntOrString interface {
@@ -63,5 +129,5 @@ func exportToJsonFile[K IntOrString](exportOption *ExportOption, m map[any]any, 
 	if sheetOption.ExportFileName == "" {
 		sheetOption.ExportFileName = fmt.Sprintf("%s.json", sheetOption.SheetName)
 	}
-	return os.WriteFile(exportOption.ExportPath+sheetOption.ExportFileName, jsonData, os.ModePerm)
+	return os.WriteFile(exportOption.DataExportPath+sheetOption.ExportFileName, jsonData, os.ModePerm)
 }

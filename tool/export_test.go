@@ -6,14 +6,32 @@ import (
 	"testing"
 )
 
+func TestExportAll(t *testing.T) {
+	err := ParseProtoFile([]string{"./../proto"}, "export.proto", "cfg.proto")
+	if err != nil {
+		t.Fatal(err)
+	}
+	exportOption := &ExportOption{
+		DataImportPath:   "./../data/excel/",
+		DataExportPath:   "./../data/json/",
+		CodeTemplatePath: "./../template/",
+		CodeExportPath:   "./../cfg/",
+	}
+	excelFileName := "all.xlsx"
+	err = ExportAll(exportOption, excelFileName, "ExportCfg")
+	if err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestExport(t *testing.T) {
 	err := ParseProtoFile([]string{"./../proto"}, "cfg.proto")
 	if err != nil {
 		t.Fatal(err)
 	}
 	exportOption := &ExportOption{
-		ImportPath: "./../data/excel/",
-		ExportPath: "./../data/json/",
+		DataImportPath: "./../data/excel/",
+		DataExportPath: "./../data/json/",
 	}
 	excelFileName := "questcfg.xlsx"
 	opts := []*SheetOption{
@@ -41,7 +59,7 @@ func TestExportJson(t *testing.T) {
 }
 
 func TestProtoLoad(t *testing.T) {
-	err := ParseProtoFile([]string{"./../proto"}, "cfg.proto")
+	err := ParseProtoFile([]string{"./../proto"}, "export.proto", "cfg.proto")
 	if err != nil {
 		t.Fatal(err)
 	}
