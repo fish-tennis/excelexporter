@@ -9,7 +9,6 @@
         "CfgId": 1
       }
     ],
-    "Detail": "升级任务示例",
     "Name": "升到5级",
     "ProgressTemplate": {
       "Arg": 5,
@@ -30,7 +29,6 @@
   },
   "2": {
     "CfgId": 2,
-    "Detail": "5场战斗示例",
     "Name": "5场战斗",
     "ProgressTemplate": {
       "Arg": 5,
@@ -46,7 +44,6 @@
   },
   "20001": {
     "CfgId": 20001,
-    "Detail": "活动2子任务:累计充值达到100",
     "Name": "累充礼包",
     "ProgressTemplate": {
       "Arg": 100,
@@ -62,7 +59,6 @@
   },
   "3": {
     "CfgId": 3,
-    "Detail": "5场PVP示例,演示同一个进度类型使用动态属性而编辑出新的任务",
     "Name": "5场PVP",
     "ProgressTemplate": {
       "Arg": 5,
@@ -90,7 +86,6 @@
         "CfgId": 2
       }
     ],
-    "Detail": "活动3子任务:3日目标第1天,5场PVP",
     "Name": "3日目标第1天",
     "ProgressTemplate": {
       "Arg": 5,
@@ -114,7 +109,6 @@
         "CfgId": 2
       }
     ],
-    "Detail": "活动3子任务:3日目标第2天,等级升到10级",
     "Name": "3日目标第2天",
     "ProgressTemplate": {
       "Arg": 10,
@@ -138,7 +132,6 @@
         "CfgId": 2
       }
     ],
-    "Detail": "活动3子任务:3日目标第3天,赢20场PVP",
     "Name": "3日目标第3天",
     "ProgressTemplate": {
       "Arg": 20,
@@ -162,7 +155,6 @@
         "CfgId": 1
       }
     ],
-    "Detail": "赢5场PVP示例,演示同一个进度类型使用动态属性而编辑出新的任务",
     "Name": "赢5场PVP",
     "ProgressTemplate": {
       "Arg": 5,
@@ -182,7 +174,6 @@
   },
   "40001": {
     "CfgId": 40001,
-    "Detail": "活动4子任务:在线1分钟",
     "Name": "在线1分钟",
     "NextQuests": [
       40002
@@ -201,7 +192,6 @@
   },
   "40002": {
     "CfgId": 40002,
-    "Detail": "活动4子任务:在线5分钟",
     "Name": "在线5分钟",
     "NextQuests": [
       40003
@@ -220,7 +210,6 @@
   },
   "40003": {
     "CfgId": 40003,
-    "Detail": "活动4子任务:在线10分钟",
     "Name": "在线10分钟",
     "ProgressTemplate": {
       "Arg": 7,
@@ -244,7 +233,6 @@
         "CfgId": 1
       }
     ],
-    "Detail": "赢5场指定条件的PVP,演示复杂的数值比较接口",
     "Name": "赢5场指定条件的PVP",
     "ProgressTemplate": {
       "Arg": 5,
@@ -268,7 +256,6 @@
   },
   "60001": {
     "CfgId": 60001,
-    "Detail": "随机任务1",
     "Name": "随机任务1",
     "ProgressTemplate": {
       "Arg": 1,
@@ -284,7 +271,6 @@
   },
   "60002": {
     "CfgId": 60002,
-    "Detail": "随机任务2",
     "Name": "随机任务2",
     "ProgressTemplate": {
       "Arg": 5,
@@ -300,7 +286,6 @@
   },
   "60003": {
     "CfgId": 60003,
-    "Detail": "随机任务3",
     "Name": "随机任务3",
     "ProgressTemplate": {
       "Arg": 7,

@@ -1,14 +1,18 @@
 # excelexporter
-Excel配置表导出工具,仅仅是一个测试项目
+适用于游戏项目的Excel配置表导出工具
 
 ## Excel导出
 - 数据结构定义在proto文件中
 - 解析proto文件,获取proto中的message的结构信息
 - 解析Excel配置表,列名就是proto中定义的message的字段名
 - 导出为proto对应的json格式(也可以扩展为导出proto序列化后的二进制数据,以便于更高效的加载)
+- 支持批量导出,在一个excel里配置所有需要导出的配置表,可以批量导出并生成加载代码,把加载代码放到项目中,
+可以一个接口就完成加载所有数据,并支持并发,热更新,增量加载
+- 测试用例在tool/export_test.go
 
 ## 项目导入
 - 加载导出的json数据(或二进制数据),直接反序列化成proto的message对象
+- 测试用例在example/import_test.go
 
 ## 简单示例1:
 - 由于proto文件中已经定义了数据结构,所以excel里只需要列名和proto定义的字段名一致,就可以知道字段的类型信息,
@@ -63,5 +67,9 @@ message Test {
 - #Field=Field1_Field2_FieldN 是前2种格式的结合,既简洁又保留了兼容性,解析时会按照表头指定的字段名进行赋值,
 且单元格不需要再每行填写字段名
 
+## 复杂示例3: 单元格使用json格式
+
+
 ## TODO:
-- 自动生成加载所有配置表的代码
+- 热更新,增量加载
+- 导出protobuf二进制数据

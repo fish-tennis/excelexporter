@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/xuri/excelize/v2"
 	"os"
+	"strings"
 )
 
 type ExportOption struct {
@@ -13,6 +14,9 @@ type ExportOption struct {
 
 	CodeTemplatePath string // 代码模板目录
 	CodeExportPath   string // 代码导出目录
+
+	ExportGroup  string // 导出分组标记 c s cs
+	DefaultGroup string // 默认的分组标记
 }
 
 // 从一个总表导出所有的配置表
@@ -32,11 +36,14 @@ func ExportAll(exportOption *ExportOption, exportExcelFileName, exportSheetName 
 		MessageName: "ExportCfg",
 		KeyName:     "Sheet",
 	}
-	m, err := ConvertSheetToMap(f, exportSheetOption)
+	exportGroup := exportOption.ExportGroup
+	exportOption.ExportGroup = ""
+	m, err := ConvertSheetToMap(exportOption, f, exportSheetOption)
 	if err != nil {
 		fmt.Println(fmt.Sprintf("ExportAllErr err:%v", err))
 		return err
 	}
+	exportOption.ExportGroup = exportGroup
 	getMapValueFn := func(strMap map[string]any, key, defaultValue string) string {
 		if v, ok := strMap[key]; ok {
 			return v.(string)
@@ -52,6 +59,13 @@ func ExportAll(exportOption *ExportOption, exportExcelFileName, exportSheetName 
 	for k, v := range m {
 		sheetName := k.(string)
 		exportCfg := v.(map[string]any)
+		sheetExportGroup := getMapValueFn(exportCfg, "ExportGroup", exportOption.DefaultGroup)
+		if sheetExportGroup == "" {
+			sheetExportGroup = exportOption.DefaultGroup
+		}
+		if exportOption.ExportGroup != "" && !strings.Contains(sheetExportGroup, exportOption.ExportGroup) {
+			continue
+		}
 		sheetOption := &SheetOption{
 			SheetName:   sheetName,
 			MessageName: getMapValueFn(exportCfg, "Message", sheetName),
@@ -65,9 +79,9 @@ func ExportAll(exportOption *ExportOption, exportExcelFileName, exportSheetName 
 			return err
 		}
 		generateInfo.AddDataMgrInfo(&DataMgrInfo{
-			Name:    sheetOption.MessageName,
-			MgrType: getMapValueFn(exportCfg, "MgrType", "map"),
-			Comment: getMapValueFn(exportCfg, "Comment", ""),
+			MessageName: sheetOption.MessageName,
+			MgrType:     getMapValueFn(exportCfg, "MgrType", "map"),
+			Comment:     getMapValueFn(exportCfg, "Comment", ""),
 		})
 	}
 	// 生成代码
@@ -100,7 +114,7 @@ func ExportExcelToJson(exportOption *ExportOption, excelFileName string, sheetOp
 }
 
 func ExportSheetToJson(exportOption *ExportOption, excelFile *excelize.File, sheetOption *SheetOption) error {
-	m, err := ConvertSheetToMap(excelFile, sheetOption)
+	m, err := ConvertSheetToMap(exportOption, excelFile, sheetOption)
 	if err != nil {
 		return err
 	}

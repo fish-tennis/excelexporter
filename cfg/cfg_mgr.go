@@ -134,20 +134,3 @@ func (this *DataSlice[E]) checkDuplicateCfgId(fileName string) {
 		}
 	}
 }
-
-func LoadAny[E CfgData](mgrType string, jsonFileName string) (any, error) {
-	switch mgrType {
-	case "map":
-		ret := NewDataMap[E]()
-		err := ret.LoadJson(jsonFileName)
-		return ret, err
-	case "slice":
-		ret := &DataSlice[E]{}
-		err := ret.LoadJson(jsonFileName)
-		return ret, err
-	case "object":
-		// TODO: 反序列化proto
-		//return new(E)
-	}
-	return nil, errors.New("unsupported mgrType")
-}

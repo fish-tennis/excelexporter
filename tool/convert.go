@@ -22,6 +22,7 @@ type SheetOption struct {
 type ColumnOption struct {
 	Name        string
 	ColumnIndex int
+	ExportGroup string // 导出分组标记 c s cs
 	// 特殊的格式 如format=json
 	// 些复杂结构的数据在excel里编辑是很麻烦的,这时候可以考虑直接使用json格式
 	Format string
@@ -84,7 +85,7 @@ func ConvertColumnOption(cell string) *ColumnOption {
 	return opt
 }
 
-func ConvertSheetToMap(excelFile *excelize.File, opt *SheetOption) (map[any]any, error) {
+func ConvertSheetToMap(exportOption *ExportOption, excelFile *excelize.File, opt *SheetOption) (map[any]any, error) {
 	msgDesc := FindMessageDescriptor(opt.MessageName)
 	if msgDesc == nil {
 		return nil, fmt.Errorf("message %s not found", opt.MessageName)
@@ -106,6 +107,7 @@ func ConvertSheetToMap(excelFile *excelize.File, opt *SheetOption) (map[any]any,
 			fmt.Println(err)
 		}
 	}()
+	hasParseExportGroupRow := false
 	var columnOpts []*ColumnOption
 	m := make(map[any]any)
 	rowIdx := -1
@@ -120,8 +122,8 @@ func ConvertSheetToMap(excelFile *excelize.File, opt *SheetOption) (map[any]any,
 			fmt.Println("empty row")
 			continue
 		}
-		// 标记行
 		column0 := strings.TrimSpace(row[0])
+		// 解析字段列名
 		// 特殊标记的##var的列或者第一行非#开始的行就是列名定义行
 		if len(columnOpts) == 0 && isColumnNameDefineRow(column0) {
 			// 列名
@@ -155,12 +157,31 @@ func ConvertSheetToMap(excelFile *excelize.File, opt *SheetOption) (map[any]any,
 			fmt.Println(fmt.Sprintf("keyName:%v keyType:%v", opt.KeyName, opt.KeyType))
 			continue
 		}
+		// 解析导出分组标记
+		if !hasParseExportGroupRow && len(columnOpts) > 0 && exportOption.ExportGroup != "" && isExportGroupRow(column0) {
+			for _, columnOpt := range columnOpts {
+				group := exportOption.DefaultGroup
+				if columnOpt.ColumnIndex < len(row) {
+					group = strings.TrimSpace(row[columnOpt.ColumnIndex])
+					if group == "" {
+						group = exportOption.DefaultGroup
+					}
+				}
+				columnOpt.ExportGroup = group
+			}
+			hasParseExportGroupRow = true
+			continue
+		}
 		// 跳过非数据行
 		if strings.HasPrefix(column0, "#") {
 			continue
 		}
+		// 解析数据行
 		rowValue := make(map[string]any)
 		for _, columnOpt := range columnOpts {
+			if exportOption.ExportGroup != "" && !strings.Contains(columnOpt.ExportGroup, exportOption.ExportGroup) {
+				continue
+			}
 			fieldDesc := FindFieldDescriptor(msgDesc, columnOpt.Name)
 			if fieldDesc == nil {
 				fmt.Println(fmt.Sprintf("FieldNameNotFound row%v name:%s", rowIdx, columnOpt.Name))
@@ -169,9 +190,13 @@ func ConvertSheetToMap(excelFile *excelize.File, opt *SheetOption) (map[any]any,
 			if columnOpt.ColumnIndex >= len(row) {
 				continue // 跳过空的cell
 			}
-			cell := strings.TrimSpace(row[columnOpt.ColumnIndex])
+			cell := strings.TrimSpace(row[columnOpt.ColumnIndex]) // 移除首尾的空字符串
 			// format扩展 json
 			if columnOpt.Format == "json" {
+				// 允许不填最外层的{}
+				if len(cell) > 0 && cell[0] != '{' && cell[len(cell)-1] != '}' {
+					cell = "{" + cell + "}"
+				}
 				err = SetFieldValueJson(rowValue, fieldDesc, columnOpt, cell)
 				if err != nil {
 					fmt.Println(fmt.Sprintf("SetFieldValueJsonErr row%v err:%v", rowIdx, err))
@@ -198,6 +223,16 @@ func ConvertSheetToMap(excelFile *excelize.File, opt *SheetOption) (map[any]any,
 
 func isColumnNameDefineRow(column0 string) bool {
 	if strings.HasPrefix(column0, "##var") {
+		return true
+	}
+	if strings.HasPrefix(column0, "#") {
+		return false
+	}
+	return true
+}
+
+func isExportGroupRow(column0 string) bool {
+	if strings.HasPrefix(column0, "##group") {
 		return true
 	}
 	if strings.HasPrefix(column0, "#") {

@@ -9,32 +9,22 @@ import (
 )
 
 type DataMgrInfo struct {
-	Name    string
-	MgrType string // map slice object
-	Comment string
+	MessageName string // proto message name
+	MgrType     string // map slice object
+	Comment     string
 }
 
 type GenerateInfo struct {
 	PackageName   string
 	TemplateFiles []string
 	Mgrs          []*DataMgrInfo
-	DataMaps      []*DataMgrInfo
-	DataSlices    []*DataMgrInfo
-	DataObjects   []*DataMgrInfo
 }
 
 func (g *GenerateInfo) AddDataMgrInfo(info *DataMgrInfo) {
-	switch info.MgrType {
-	case "map":
-		g.DataMaps = append(g.DataMaps, info)
-	case "slice":
-		g.DataSlices = append(g.DataSlices, info)
-	case "object":
-		g.DataObjects = append(g.DataObjects, info)
-	}
 	g.Mgrs = append(g.Mgrs, info)
 }
 
+// 根据模板文件,生成代码
 func GenerateCode(generateInfo *GenerateInfo, codeExportPath string) error {
 	for _, templateFile := range generateInfo.TemplateFiles {
 		tmpl, err := template.ParseFiles(templateFile)

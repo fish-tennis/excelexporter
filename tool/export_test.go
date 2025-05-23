@@ -16,6 +16,8 @@ func TestExportAll(t *testing.T) {
 		DataExportPath:   "./../data/json/",
 		CodeTemplatePath: "./../template/",
 		CodeExportPath:   "./../cfg/",
+		ExportGroup:      "s",
+		DefaultGroup:     "cs",
 	}
 	excelFileName := "all.xlsx"
 	err = ExportAll(exportOption, excelFileName, "ExportCfg")
