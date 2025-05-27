@@ -53,18 +53,11 @@ func (this *DataMap[E]) LoadJson(fileName string) error {
 		slog.Error("LoadJsonErr", "fileName", fileName, "err", err)
 		return err
 	}
-	var cfgList []E
-	err = json.Unmarshal(fileData, &cfgList)
+	cfgMap := make(map[int32]E)
+	err = json.Unmarshal(fileData, &cfgMap)
 	if err != nil {
 		slog.Error("LoadJsonErr", "fileName", fileName, "err", err)
 		return err
-	}
-	cfgMap := make(map[int32]E, len(cfgList))
-	for _, cfg := range cfgList {
-		if _, exists := cfgMap[cfg.GetCfgId()]; exists {
-			slog.Error("duplicate id", "fileName", fileName, "id", cfg.GetCfgId())
-		}
-		cfgMap[cfg.GetCfgId()] = cfg
 	}
 	this.cfgs = cfgMap
 	slog.Info("LoadJson", "fileName", fileName, "count", len(this.cfgs))

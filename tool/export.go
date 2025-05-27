@@ -37,7 +37,7 @@ func ExportAll(exportOption *ExportOption, exportExcelFileName, exportSheetName 
 		KeyName:     "Sheet",
 	}
 	exportGroup := exportOption.ExportGroup
-	exportOption.ExportGroup = ""
+	exportOption.ExportGroup = "" // 总表没有单独设置分组标记的行
 	m, err := ConvertSheetToMap(exportOption, f, exportSheetOption)
 	if err != nil {
 		fmt.Println(fmt.Sprintf("ExportAllErr err:%v", err))
@@ -81,7 +81,7 @@ func ExportAll(exportOption *ExportOption, exportExcelFileName, exportSheetName 
 		generateInfo.AddDataMgrInfo(&DataMgrInfo{
 			MessageName: sheetOption.MessageName,
 			MgrType:     getMapValueFn(exportCfg, "MgrType", "map"),
-			Comment:     getMapValueFn(exportCfg, "Comment", ""),
+			CodeComment: getMapValueFn(exportCfg, "CodeComment", ""),
 		})
 	}
 	// 生成代码

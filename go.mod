@@ -5,6 +5,7 @@ go 1.22
 require (
 	github.com/jhump/protoreflect v1.17.0
 	github.com/xuri/excelize/v2 v2.7.0
+	google.golang.org/protobuf v1.34.2
 )
 
 require (
@@ -19,5 +20,4 @@ require (
 	golang.org/x/net v0.25.0 // indirect
 	golang.org/x/sync v0.8.0 // indirect
 	golang.org/x/text v0.15.0 // indirect
-	google.golang.org/protobuf v1.34.2 // indirect
 )

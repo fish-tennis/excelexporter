@@ -4,12 +4,18 @@ package cfg
 import "excelexporter/example/pb"
 
 var (
-  {{range.Mgrs}}{{if eq .MgrType "map"}}{{.MessageName}}Mgr *DataMap[*pb.{{.MessageName}}]{{end}}
-  {{if eq .MgrType "slice"}}{{.MessageName}}Mgr *DataSlice[*pb.{{.MessageName}}]{{end}}
-  {{if eq .MgrType "object"}}{{.MessageName}}Mgr *pb.{{.MessageName}}{{end}}{{end}}
+    isLoading   = int32(0)
+    {{range.Mgrs}}//{{.CodeComment}}
+    {{if eq .MgrType "map"}}{{.MessageName}}Mgr *DataMap[*pb.{{.MessageName}}]{{end}}
+    {{if eq .MgrType "slice"}}{{.MessageName}}Mgr *DataSlice[*pb.{{.MessageName}}]{{end}}
+    {{if eq .MgrType "object"}}{{.MessageName}}Mgr *pb.{{.MessageName}}{{end}}{{end}}
 )
 
 func Load(dataDir string) error {
+    if !atomic.CompareAndSwapInt32(&isLoading, 0, 1) {
+        return errors.New("loading concurrency")
+    }
+    defer atomic.StoreInt32(&isLoading, 0)
     var err error
     // 考虑到并发安全,这里先加载到临时变量
     {{range.Mgrs}}

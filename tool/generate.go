@@ -11,7 +11,7 @@ import (
 type DataMgrInfo struct {
 	MessageName string // proto message name
 	MgrType     string // map slice object
-	Comment     string
+	CodeComment string
 }
 
 type GenerateInfo struct {
