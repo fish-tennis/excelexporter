@@ -294,7 +294,7 @@
     "QuestType": 1,
     "Rewards": [
       {
-        "CfgId": 1,
+        "CfgId": 4,
         "Num": 10
       }
     ]

@@ -12,12 +12,13 @@ func TestExportAll(t *testing.T) {
 		t.Fatal(err)
 	}
 	exportOption := &ExportOption{
-		DataImportPath:   "./../data/excel/",
-		DataExportPath:   "./../data/json/",
-		CodeTemplatePath: "./../template/",
-		CodeExportPath:   "./../cfg/",
-		ExportGroup:      "s",
-		DefaultGroup:     "cs",
+		DataImportPath:    "./../data/excel/",
+		DataExportPath:    "./../data/json/",
+		CodeTemplatePath:  "./../template/",
+		CodeExportPath:    "./../cfg/",
+		CodeTemplateFiles: []string{"data_mgr.go.template"},
+		ExportGroup:       "s",
+		DefaultGroup:      "cs",
 	}
 	excelFileName := "all.xlsx"
 	err = ExportAll(exportOption, excelFileName, "ExportCfg")

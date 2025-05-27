@@ -15,7 +15,7 @@ type DataMgrInfo struct {
 }
 
 type GenerateInfo struct {
-	PackageName   string
+	//PackageName   string
 	TemplateFiles []string
 	Mgrs          []*DataMgrInfo
 }

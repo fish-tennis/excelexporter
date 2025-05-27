@@ -9,8 +9,9 @@ message ExportCfg {
   string Excel = 1; // excel文件名
   string Sheet = 2; // sheet名
   string Message = 3; // proto里定义的结构名
-  string Key = 4; // 不填就默认以sheet的第一列作为key
-  string MgrType = 5; // 导出的数据管理类类型,map slice object
+  string MgrType = 4; // 导出的数据管理类类型,map slice object
+  string MapKey = 5; // 不填就默认以sheet的第一列作为key(MgrType=map时才有效)
   string Group = 6; // 导出分组标记 c s cs
-  string CodeComment = 7; // 导出到代码里的注释
+  string Merge = 7; // 把不同的sheet里面的数据合并到一个文件中
+  string CodeComment = 8; // 导出到代码里的注释
 }

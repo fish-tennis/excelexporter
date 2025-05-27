@@ -14,9 +14,11 @@ import (
 type SheetOption struct {
 	SheetName      string
 	MessageName    string
-	KeyName        string // 填空直接使用第一个非注释列作为key名
-	KeyType        string // int int32 int64 uint uint32 uint64 string
+	MgrType        string // map slice object
+	MapKeyName     string // 填空直接使用第一个非注释列作为key名(MgrType=map时才有效)
+	MapKeyType     string // int int32 int64 uint uint32 uint64 string(MgrType=map时才有效)
 	ExportFileName string // 填空直接使用SheetName作为文件名
+	ColumnOpts     []*ColumnOption
 }
 
 type ColumnOption struct {
@@ -35,6 +37,7 @@ type ColumnOption struct {
 	//	| 1_3       | 1_3             | Id_1#Count_3 |
 	//	---------------------------------------------
 	FieldNames []string
+	Ref        string // 关联的其他配置表的sheet名
 }
 
 // 简洁模式,不需要字段名(#Field=no)
@@ -80,22 +83,31 @@ func ConvertColumnOption(cell string) *ColumnOption {
 			if len(kv) == 2 {
 				opt.Format = kv[1]
 			}
+		case "ref":
+			if len(kv) == 2 {
+				opt.Ref = kv[1]
+			}
 		}
 	}
 	return opt
 }
 
-func ConvertSheetToMap(exportOption *ExportOption, excelFile *excelize.File, opt *SheetOption) (map[any]any, error) {
+// opt.MgrType="map"时,返回map[key]any
+// opt.MgrType="slice"时,返回[]any
+func ConvertSheet(exportOption *ExportOption, excelFile *excelize.File, opt *SheetOption) (any, error) {
 	msgDesc := FindMessageDescriptor(opt.MessageName)
 	if msgDesc == nil {
 		return nil, fmt.Errorf("message %s not found", opt.MessageName)
 	}
-	keyFieldDesc := FindFieldDescriptor(msgDesc, opt.KeyName)
-	if keyFieldDesc != nil {
-		opt.KeyName = keyFieldDesc.GetJSONName() // 因为要导出为json格式,所以用json名
-	}
-	if opt.KeyType == "" && keyFieldDesc != nil {
-		opt.KeyType = GetKeyTypeString(keyFieldDesc)
+	var mapKeyFieldDesc *desc.FieldDescriptor
+	if opt.MgrType == "map" {
+		mapKeyFieldDesc = FindFieldDescriptor(msgDesc, opt.MapKeyName)
+		if mapKeyFieldDesc != nil {
+			opt.MapKeyName = mapKeyFieldDesc.GetJSONName() // 因为要导出为json格式,所以用json名
+		}
+		if opt.MapKeyType == "" && mapKeyFieldDesc != nil {
+			opt.MapKeyType = GetKeyTypeString(mapKeyFieldDesc)
+		}
 	}
 	rows, err := excelFile.Rows(opt.SheetName)
 	if err != nil {
@@ -108,8 +120,9 @@ func ConvertSheetToMap(exportOption *ExportOption, excelFile *excelize.File, opt
 		}
 	}()
 	hasParseExportGroupRow := false
-	var columnOpts []*ColumnOption
+	opt.ColumnOpts = make([]*ColumnOption, 0)
 	m := make(map[any]any)
+	s := make([]any, 0)
 	rowIdx := -1
 	for rows.Next() {
 		rowIdx++
@@ -125,7 +138,7 @@ func ConvertSheetToMap(exportOption *ExportOption, excelFile *excelize.File, opt
 		column0 := strings.TrimSpace(row[0])
 		// 解析字段列名
 		// 特殊标记的##var的列或者第一行非#开始的行就是列名定义行
-		if len(columnOpts) == 0 && isColumnNameDefineRow(column0) {
+		if len(opt.ColumnOpts) == 0 && isColumnNameDefineRow(column0) {
 			// 列名
 			columnNames := row
 			fmt.Println("columnNames:")
@@ -141,25 +154,25 @@ func ConvertSheetToMap(exportOption *ExportOption, excelFile *excelize.File, opt
 					return nil, errors.New(fmt.Sprintf("columnName err %v", columnName))
 				}
 				columnOpt.ColumnIndex = columnIndex
-				columnOpts = append(columnOpts, columnOpt)
-				// 如果没有指定Key,则默认第一个非注释列为Key
-				if opt.KeyName == "" {
-					opt.KeyName = columnOpt.Name
-					keyFieldDesc = FindFieldDescriptor(msgDesc, opt.KeyName)
-					if keyFieldDesc != nil {
-						opt.KeyName = keyFieldDesc.GetJSONName() // 因为要导出为json格式,所以用json名
+				opt.ColumnOpts = append(opt.ColumnOpts, columnOpt)
+				// 如果没有指定MapKey,则默认第一个非注释列为MapKey
+				if opt.MgrType == "map" && opt.MapKeyName == "" {
+					opt.MapKeyName = columnOpt.Name
+					mapKeyFieldDesc = FindFieldDescriptor(msgDesc, opt.MapKeyName)
+					if mapKeyFieldDesc != nil {
+						opt.MapKeyName = mapKeyFieldDesc.GetJSONName() // 因为要导出为json格式,所以用json名
 					}
-					if opt.KeyType == "" && keyFieldDesc != nil {
-						opt.KeyType = GetKeyTypeString(keyFieldDesc)
+					if opt.MapKeyType == "" && mapKeyFieldDesc != nil {
+						opt.MapKeyType = GetKeyTypeString(mapKeyFieldDesc)
 					}
 				}
 			}
-			fmt.Println(fmt.Sprintf("keyName:%v keyType:%v", opt.KeyName, opt.KeyType))
+			fmt.Println(fmt.Sprintf("keyName:%v keyType:%v", opt.MapKeyName, opt.MapKeyType))
 			continue
 		}
 		// 解析导出分组标记
-		if !hasParseExportGroupRow && len(columnOpts) > 0 && exportOption.ExportGroup != "" && isExportGroupRow(column0) {
-			for _, columnOpt := range columnOpts {
+		if !hasParseExportGroupRow && len(opt.ColumnOpts) > 0 && exportOption.ExportGroup != "" && isExportGroupRow(column0) {
+			for _, columnOpt := range opt.ColumnOpts {
 				group := exportOption.DefaultGroup
 				if columnOpt.ColumnIndex < len(row) {
 					group = strings.TrimSpace(row[columnOpt.ColumnIndex])
@@ -178,7 +191,7 @@ func ConvertSheetToMap(exportOption *ExportOption, excelFile *excelize.File, opt
 		}
 		// 解析数据行
 		rowValue := make(map[string]any)
-		for _, columnOpt := range columnOpts {
+		for _, columnOpt := range opt.ColumnOpts {
 			if exportOption.ExportGroup != "" && !strings.Contains(columnOpt.ExportGroup, exportOption.ExportGroup) {
 				continue
 			}
@@ -210,15 +223,25 @@ func ConvertSheetToMap(exportOption *ExportOption, excelFile *excelize.File, opt
 				}
 			}
 		}
-		keyValue := rowValue[opt.KeyName]
-		if keyValue == nil {
-			fmt.Println(fmt.Sprintf("row%v key %s not found", rowIdx, opt.KeyName))
-			continue
+		if opt.MgrType == "map" {
+			keyValue := rowValue[opt.MapKeyName]
+			if keyValue == nil {
+				fmt.Println(fmt.Sprintf("row%v key %s not found", rowIdx, opt.MapKeyName))
+				continue
+			}
+			m[keyValue] = rowValue
+		} else if opt.MgrType == "slice" {
+			s = append(s, rowValue)
 		}
-		m[keyValue] = rowValue
 		fmt.Println()
 	}
-	return m, nil
+	if opt.MgrType == "map" {
+		// 把key转换成实际类型
+		return convertToJsonMapByKeyType(m, opt.MapKeyType), nil
+	} else if opt.MgrType == "slice" {
+		return s, nil
+	}
+	return nil, errors.New("unsupported MgrType")
 }
 
 func isColumnNameDefineRow(column0 string) bool {

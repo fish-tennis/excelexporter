@@ -37,6 +37,7 @@ func TestImportAll(t *testing.T) {
 	}
 }
 
+// 并发加载
 func TestImportConcurrency(t *testing.T) {
 	wg := sync.WaitGroup{}
 	for i := 0; i < 10; i++ {
