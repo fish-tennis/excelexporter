@@ -21,14 +21,14 @@ var (
 
 // processFn:预处理接口
 // filter:过滤接口,返回false则不加载该文件
-func Load(dataDir string, processFn func(mgrName,msgName string, mgr any) error, filter func(fileName string) bool) error {
+func Load(dataDir string, processFn func(mgr any, mgrName,messageName,fileName string) error, filter func(fileName string) bool) error {
     if !atomic.CompareAndSwapInt32(&isLoading, 0, 1) {
         return ErrLoadingConcurrency
     }
     defer atomic.StoreInt32(&isLoading, 0)
     var err error
     
-    if filter == nil || filter(dataDir+"ItemCfg.json") {
+    if filter == nil || filter("ItemCfg.json") {
         // 考虑到并发安全,这里先加载到临时变量
         tmpItemCfgs := NewDataMap[*pb.ItemCfg]()
         err = tmpItemCfgs.LoadJson(dataDir+"ItemCfg.json")
@@ -37,7 +37,7 @@ func Load(dataDir string, processFn func(mgrName,msgName string, mgr any) error,
         }
         if processFn != nil {
             // 预处理数据
-            err = processFn("ItemCfgs", "ItemCfg", tmpItemCfgs)
+            err = processFn(tmpItemCfgs, "ItemCfgs", "ItemCfg", "ItemCfg.json")
             if err != nil {
                 return err
             }
@@ -45,7 +45,7 @@ func Load(dataDir string, processFn func(mgrName,msgName string, mgr any) error,
         // 最后再赋值给全局变量(引用赋值是原子操作)
         ItemCfgs = tmpItemCfgs
     }
-    if filter == nil || filter(dataDir+"Quests.json") {
+    if filter == nil || filter("Quests.json") {
         // 考虑到并发安全,这里先加载到临时变量
         tmpQuests := NewDataMap[*pb.QuestCfg]()
         err = tmpQuests.LoadJson(dataDir+"Quests.json")
@@ -54,7 +54,7 @@ func Load(dataDir string, processFn func(mgrName,msgName string, mgr any) error,
         }
         if processFn != nil {
             // 预处理数据
-            err = processFn("Quests", "QuestCfg", tmpQuests)
+            err = processFn(tmpQuests, "Quests", "QuestCfg", "Quests.json")
             if err != nil {
                 return err
             }

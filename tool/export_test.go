@@ -14,6 +14,7 @@ func TestExportAll(t *testing.T) {
 	exportOption := &ExportOption{
 		DataImportPath:    "./../data/excel/",
 		DataExportPath:    "./../data/json/",
+		Md5ExportPath:     "./../data/json/md5.json",
 		CodeTemplatePath:  "./../template/",
 		CodeExportPath:    "./../cfg/",
 		CodeTemplateFiles: []string{"data_mgr.go.template"},

@@ -99,6 +99,5 @@ message Test {
 ```
 
 ## TODO:
-- 导出时,导出文件的md5信息
 - 热更新时,配置采用增量加载
 - 导出protobuf二进制数据

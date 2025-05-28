@@ -1,6 +1,8 @@
 package tool
 
 import (
+	"crypto/md5"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"github.com/xuri/excelize/v2"
@@ -8,9 +10,11 @@ import (
 	"strings"
 )
 
+// 导出设置项
 type ExportOption struct {
 	DataImportPath string // Excel导入目录(excel所在目录)
 	DataExportPath string // 数据导出目录
+	Md5ExportPath  string // 可选项:导出md5文件完整路径
 
 	CodeTemplatePath  string   // 代码模板目录
 	CodeExportPath    string   // 代码导出目录
@@ -119,6 +123,7 @@ func ExportAll(exportOption *ExportOption, exportExcelFileName, exportSheetName 
 		}
 	}
 	// 导出
+	md5Map := make(map[string]string)
 	for _, exportInfo := range exportInfoMap {
 		jsonData, err := json.MarshalIndent(exportInfo.MgrData, "", "  ")
 		if err != nil {
@@ -138,6 +143,7 @@ func ExportAll(exportOption *ExportOption, exportExcelFileName, exportSheetName 
 				exportFileName, exportInfo.MergeName, err))
 			return err
 		}
+		md5Map[exportFileName] = GetMd5(jsonData)
 		mgrName := exportInfo.SheetOption.MessageName + "s"
 		if exportInfo.MergeName != "" {
 			mgrName = exportInfo.MergeName
@@ -149,6 +155,19 @@ func ExportAll(exportOption *ExportOption, exportExcelFileName, exportSheetName 
 			FileName:    exportFileName,
 			CodeComment: exportInfo.CodeComment,
 		})
+	}
+	if exportOption.Md5ExportPath != "" {
+		// 导出文件md5码
+		jsonData, err := json.MarshalIndent(md5Map, "", "  ")
+		if err != nil {
+			fmt.Println(fmt.Sprintf("export md5 err:%v", err))
+			return err
+		}
+		err = os.WriteFile(exportOption.Md5ExportPath, jsonData, os.ModePerm)
+		if err != nil {
+			fmt.Println(fmt.Sprintf("export md5 err:%v", err))
+			return err
+		}
 	}
 	// 生成代码
 	err = GenerateCode(generateInfo, exportOption.CodeExportPath)
@@ -271,19 +290,9 @@ func ExportSheetToJson(exportOption *ExportOption, excelFile *excelize.File, she
 	return os.WriteFile(exportOption.DataExportPath+sheetOption.ExportFileName, jsonData, os.ModePerm)
 }
 
-type IntOrString interface {
-	~int | ~int8 | ~int16 | ~int32 | ~int64 |
-		~uint | ~uint8 | ~uint16 | ~uint32 | ~uint64 | ~string
-}
-
-func exportToJsonFile[K IntOrString](exportOption *ExportOption, m map[any]any, sheetOption *SheetOption) error {
-	jsonMap := convertToJsonMap[K](m)
-	jsonData, err := json.Marshal(jsonMap)
-	if err != nil {
-		return err
-	}
-	if sheetOption.ExportFileName == "" {
-		sheetOption.ExportFileName = fmt.Sprintf("%s.json", sheetOption.SheetName)
-	}
-	return os.WriteFile(exportOption.DataExportPath+sheetOption.ExportFileName, jsonData, os.ModePerm)
+func GetMd5(bytes []byte) string {
+	md5Ctx := md5.New()
+	md5Ctx.Write(bytes)
+	cipherStr := md5Ctx.Sum(nil)
+	return hex.EncodeToString(cipherStr)
 }

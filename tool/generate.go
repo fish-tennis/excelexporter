@@ -10,10 +10,10 @@ import (
 
 type DataMgrInfo struct {
 	MessageName string // proto message name
-	MgrName     string //
+	MgrName     string
 	MgrType     string // map slice object
-	FileName    string
-	CodeComment string
+	FileName    string // 导出文件名,不含目录
+	CodeComment string // 代码注释
 }
 
 type GenerateInfo struct {

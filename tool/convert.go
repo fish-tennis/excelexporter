@@ -264,6 +264,11 @@ func isExportGroupRow(column0 string) bool {
 	return true
 }
 
+type IntOrString interface {
+	~int | ~int8 | ~int16 | ~int32 | ~int64 |
+		~uint | ~uint8 | ~uint16 | ~uint32 | ~uint64 | ~string
+}
+
 func convertToJsonMap[K IntOrString](m map[any]any) any {
 	jsonMap := make(map[K]any)
 	for k, v := range m {

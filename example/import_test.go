@@ -31,11 +31,7 @@ func TestImport(t *testing.T) {
 
 // 加载所有配置文件(由TestExportAll导出的文件)
 func TestImportAll(t *testing.T) {
-	preprocessFn := func(mgrName, msgName string, mgr any) error {
-		t.Logf("preprocess: %v", mgrName)
-		return nil
-	}
-	err := cfg.Load("./../data/json/", preprocessFn, nil)
+	err := cfg.Load("./../data/json/", nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -60,4 +56,26 @@ func TestImportConcurrency(t *testing.T) {
 		}(i)
 	}
 	wg.Wait()
+}
+
+// reload
+func TestReload(t *testing.T) {
+	loadedFiles := make(map[string]struct{})
+	preprocessFn := func(mgr any, mgrName, messageName, fileName string) error {
+		t.Logf("preprocess: %v fileName:%v", mgrName, fileName)
+		loadedFiles[fileName] = struct{}{}
+		return nil
+	}
+	filterFn := func(fileName string) bool {
+		if _, ok := loadedFiles[fileName]; ok {
+			return false
+		}
+		return true
+	}
+	for i := 0; i < 2; i++ {
+		err := cfg.Load("./../data/json/", preprocessFn, filterFn)
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
 }
