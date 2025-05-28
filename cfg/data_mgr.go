@@ -8,48 +8,60 @@ import (
 )
 
 var (
+    ErrLoadingConcurrency = errors.New("loading concurrency")
     isLoading   = int32(0)
-    //任务数据
-    QuestCfgMgr *DataMap[*pb.QuestCfg]
-    
     //物品数据
-    ItemCfgMgr *DataMap[*pb.ItemCfg]
+    ItemCfgs *DataMap[*pb.ItemCfg]
+    
+    //任务数据
+    Quests *DataMap[*pb.QuestCfg]
     
     
 )
 
-func Load(dataDir string) error {
+// processFn:预处理接口
+// filter:过滤接口,返回false则不加载该文件
+func Load(dataDir string, processFn func(mgrName,msgName string, mgr any) error, filter func(fileName string) bool) error {
     if !atomic.CompareAndSwapInt32(&isLoading, 0, 1) {
-        return errors.New("loading concurrency")
+        return ErrLoadingConcurrency
     }
     defer atomic.StoreInt32(&isLoading, 0)
     var err error
-    // 考虑到并发安全,这里先加载到临时变量
     
-    tmpQuestCfgMgr := NewDataMap[*pb.QuestCfg]()
-    err = tmpQuestCfgMgr.LoadJson(dataDir+"QuestCfg.json")
-    if err != nil {
-        return err
+    if filter == nil || filter(dataDir+"ItemCfg.json") {
+        // 考虑到并发安全,这里先加载到临时变量
+        tmpItemCfgs := NewDataMap[*pb.ItemCfg]()
+        err = tmpItemCfgs.LoadJson(dataDir+"ItemCfg.json")
+        if err != nil {
+            return err
+        }
+        if processFn != nil {
+            // 预处理数据
+            err = processFn("ItemCfgs", "ItemCfg", tmpItemCfgs)
+            if err != nil {
+                return err
+            }
+        }
+        // 最后再赋值给全局变量(引用赋值是原子操作)
+        ItemCfgs = tmpItemCfgs
     }
-    tmpItemCfgMgr := NewDataMap[*pb.ItemCfg]()
-    err = tmpItemCfgMgr.LoadJson(dataDir+"ItemCfg.json")
-    if err != nil {
-        return err
+    if filter == nil || filter(dataDir+"Quests.json") {
+        // 考虑到并发安全,这里先加载到临时变量
+        tmpQuests := NewDataMap[*pb.QuestCfg]()
+        err = tmpQuests.LoadJson(dataDir+"Quests.json")
+        if err != nil {
+            return err
+        }
+        if processFn != nil {
+            // 预处理数据
+            err = processFn("Quests", "QuestCfg", tmpQuests)
+            if err != nil {
+                return err
+            }
+        }
+        // 最后再赋值给全局变量(引用赋值是原子操作)
+        Quests = tmpQuests
     }
-    // 预处理数据
-    
-    err = PreProcess("QuestCfg", tmpQuestCfgMgr)
-    if err != nil {
-        return err
-    }
-    err = PreProcess("ItemCfg", tmpItemCfgMgr)
-    if err != nil {
-        return err
-    }
-    // 最后再赋值给全局变量(引用赋值是原子操作)
-    
-    QuestCfgMgr = tmpQuestCfgMgr
-    ItemCfgMgr = tmpItemCfgMgr
     return err
 }
 

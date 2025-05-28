@@ -10,7 +10,9 @@ import (
 
 type DataMgrInfo struct {
 	MessageName string // proto message name
+	MgrName     string //
 	MgrType     string // map slice object
+	FileName    string
 	CodeComment string
 }
 

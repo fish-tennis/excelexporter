@@ -31,7 +31,11 @@ func TestImport(t *testing.T) {
 
 // 加载所有配置文件(由TestExportAll导出的文件)
 func TestImportAll(t *testing.T) {
-	err := cfg.Load("./../data/json/")
+	preprocessFn := func(mgrName, msgName string, mgr any) error {
+		t.Logf("preprocess: %v", mgrName)
+		return nil
+	}
+	err := cfg.Load("./../data/json/", preprocessFn, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -47,7 +51,7 @@ func TestImportConcurrency(t *testing.T) {
 			if idx == 5 {
 				time.Sleep(time.Second)
 			}
-			err := cfg.Load("./../data/json/")
+			err := cfg.Load("./../data/json/", nil, nil)
 			if err != nil {
 				t.Logf("%v Load err:%v", idx, err)
 			} else {

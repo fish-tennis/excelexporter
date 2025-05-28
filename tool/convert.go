@@ -141,8 +141,8 @@ func ConvertSheet(exportOption *ExportOption, excelFile *excelize.File, opt *She
 		if len(opt.ColumnOpts) == 0 && isColumnNameDefineRow(column0) {
 			// 列名
 			columnNames := row
-			fmt.Println("columnNames:")
-			fmt.Println(columnNames)
+			//fmt.Println("columnNames:")
+			//fmt.Println(columnNames)
 			for columnIndex, columnName := range columnNames {
 				columnName = strings.TrimSpace(columnName)
 				// 跳过注释列

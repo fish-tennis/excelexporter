@@ -27,6 +27,58 @@
       }
     ]
   },
+  "100001": {
+    "CfgId": 100001,
+    "Name": "下降尘凡",
+    "QuestType": 2,
+    "Rewards": [
+      {
+        "CfgId": 1,
+        "Num": 2
+      }
+    ]
+  },
+  "100002": {
+    "CfgId": 100002,
+    "Name": "禅院逢友",
+    "QuestType": 2,
+    "Rewards": [
+      {
+        "CfgId": 2,
+        "Num": 3
+      }
+    ]
+  },
+  "100003": {
+    "CfgId": 100003,
+    "Name": "黑熊烧山",
+    "QuestType": 2,
+    "Rewards": [
+      {
+        "CfgId": 1,
+        "Num": 5
+      },
+      {
+        "CfgId": 3,
+        "Num": 1
+      }
+    ]
+  },
+  "100004": {
+    "CfgId": 100004,
+    "Name": "九九归一",
+    "QuestType": 2,
+    "Rewards": [
+      {
+        "CfgId": 1,
+        "Num": 5
+      },
+      {
+        "CfgId": 4,
+        "Num": 2
+      }
+    ]
+  },
   "2": {
     "CfgId": 2,
     "Name": "5场战斗",

@@ -20,6 +20,13 @@ type ExportOption struct {
 	DefaultGroup string // 默认的分组标记
 }
 
+type ExportInfo struct {
+	MgrData     any
+	SheetOption *SheetOption
+	MergeName   string
+	CodeComment string
+}
+
 // 从一个总表导出所有的配置表
 func ExportAll(exportOption *ExportOption, exportExcelFileName, exportSheetName string) error {
 	f, err := excelize.OpenFile(exportOption.DataImportPath + exportExcelFileName)
@@ -54,9 +61,7 @@ func ExportAll(exportOption *ExportOption, exportExcelFileName, exportSheetName 
 	for _, templateFile := range exportOption.CodeTemplateFiles {
 		generateInfo.TemplateFiles = append(generateInfo.TemplateFiles, exportOption.CodeTemplatePath+templateFile)
 	}
-	// TODO: Merge功能,把不同的sheet的数据合并到一个文件中
-	sheetDataMap := make(map[string]any)
-	sheetOptionMap := make(map[string]*SheetOption)
+	exportInfoMap := make(map[string]*ExportInfo)
 	for _, v := range sheets.([]any) {
 		exportCfg := v.(map[string]any)
 		sheetName := getMapValueFn(exportCfg, "Sheet", "")
@@ -75,6 +80,8 @@ func ExportAll(exportOption *ExportOption, exportExcelFileName, exportSheetName 
 		if sheetOption.MgrType == "map" {
 			sheetOption.MapKeyName = getMapValueFn(exportCfg, "MapKey", "")
 		}
+		codeComment := getMapValueFn(exportCfg, "CodeComment", "")
+		mergeName := getMapValueFn(exportCfg, "Merge", "")
 		excelFileName := getMapValueFn(exportCfg, "Excel", "")
 		f, err = excelize.OpenFile(exportOption.DataImportPath + excelFileName)
 		if err != nil {
@@ -86,25 +93,62 @@ func ExportAll(exportOption *ExportOption, exportExcelFileName, exportSheetName 
 		if err != nil {
 			return err
 		}
-		jsonData, err := json.MarshalIndent(sheetData, "", "  ")
+		if mergeName == "" {
+			exportInfoMap[sheetName] = &ExportInfo{
+				MgrData:     sheetData,
+				SheetOption: sheetOption,
+				CodeComment: codeComment,
+			}
+		} else {
+			if mergeInfo, ok := exportInfoMap[mergeName]; ok {
+				mergeData, err := mergeMgrData(mergeInfo.MgrData, sheetData)
+				if err != nil {
+					fmt.Println(fmt.Sprintf("ExportAllErr excel:%v sheet:%v merge:%v err:%v",
+						excelFileName, sheetName, mergeName, err))
+					return err
+				}
+				mergeInfo.MgrData = mergeData
+			} else {
+				exportInfoMap[mergeName] = &ExportInfo{
+					MgrData:     sheetData,
+					SheetOption: sheetOption,
+					MergeName:   mergeName,
+					CodeComment: codeComment,
+				}
+			}
+		}
+	}
+	// 导出
+	for _, exportInfo := range exportInfoMap {
+		jsonData, err := json.MarshalIndent(exportInfo.MgrData, "", "  ")
 		if err != nil {
+			fmt.Println(fmt.Sprintf("ExportAllErr exportFileName:%v merge:%v err:%v",
+				exportInfo.SheetOption.ExportFileName, exportInfo.MergeName, err))
 			return err
 		}
-		if sheetOption.ExportFileName == "" {
-			sheetOption.ExportFileName = fmt.Sprintf("%s.json", sheetOption.SheetName)
+		exportFileName := ""
+		if exportInfo.MergeName == "" {
+			exportFileName = fmt.Sprintf("%s.json", exportInfo.SheetOption.SheetName)
+		} else {
+			exportFileName = fmt.Sprintf("%s.json", exportInfo.MergeName)
 		}
-		err = os.WriteFile(exportOption.DataExportPath+sheetOption.ExportFileName, jsonData, os.ModePerm)
+		err = os.WriteFile(exportOption.DataExportPath+exportFileName, jsonData, os.ModePerm)
 		if err != nil {
-			fmt.Println(fmt.Sprintf("ExportAllErr excel:%v sheet:%v err:%v", excelFileName, sheetName, err))
+			fmt.Println(fmt.Sprintf("ExportAllErr exportFileName:%v merge:%v err:%v",
+				exportFileName, exportInfo.MergeName, err))
 			return err
+		}
+		mgrName := exportInfo.SheetOption.MessageName + "s"
+		if exportInfo.MergeName != "" {
+			mgrName = exportInfo.MergeName
 		}
 		generateInfo.AddDataMgrInfo(&DataMgrInfo{
-			MessageName: sheetOption.MessageName,
-			MgrType:     sheetOption.MgrType,
-			CodeComment: getMapValueFn(exportCfg, "CodeComment", ""),
+			MessageName: exportInfo.SheetOption.MessageName,
+			MgrName:     mgrName,
+			MgrType:     exportInfo.SheetOption.MgrType,
+			FileName:    exportFileName,
+			CodeComment: exportInfo.CodeComment,
 		})
-		sheetDataMap[sheetName] = sheetData
-		sheetOptionMap[sheetName] = sheetOption
 	}
 	// 生成代码
 	err = GenerateCode(generateInfo, exportOption.CodeExportPath)
@@ -113,20 +157,21 @@ func ExportAll(exportOption *ExportOption, exportExcelFileName, exportSheetName 
 		return err
 	}
 	// ref功能,检查数据关联
-	for sheetName, sheetOption := range sheetOptionMap {
-		for _, columnOption := range sheetOption.ColumnOpts {
+	for _, exportInfo := range exportInfoMap {
+		for _, columnOption := range exportInfo.SheetOption.ColumnOpts {
 			if columnOption.Ref == "" {
 				continue
 			}
-			sheetData, _ := sheetDataMap[sheetName]
-			refSheetData, ok := sheetDataMap[columnOption.Ref]
+			sheetName := exportInfo.SheetOption.SheetName
+			sheetData := exportInfo.MgrData
+			refInfo, ok := exportInfoMap[columnOption.Ref]
 			if !ok {
 				fmt.Println(fmt.Sprintf("ref not exists sheetName:%v column:%v ref:%v", sheetName, columnOption.Name, columnOption.Ref))
 				continue
 			}
-			refKeyName := sheetOptionMap[columnOption.Ref].MapKeyName
+			refKeyName := refInfo.SheetOption.MapKeyName
 			rangeSheetData(sheetData, columnOption.Name, refKeyName, func(checkId int32) {
-				if refSheetDataMap, ok := refSheetData.(map[int32]any); ok {
+				if refSheetDataMap, ok := refInfo.MgrData.(map[int32]any); ok {
 					if _, ok := refSheetDataMap[checkId]; !ok {
 						fmt.Println(fmt.Sprintf("ref ERROR sheetName:%v column:%v ref:%v checkId:%v", sheetName, columnOption.Name, columnOption.Ref, checkId))
 					}
@@ -135,6 +180,25 @@ func ExportAll(exportOption *ExportOption, exportExcelFileName, exportSheetName 
 		}
 	}
 	return nil
+}
+
+func mergeMgrData(dst, src any) (any, error) {
+	switch m := dst.(type) {
+	case map[int32]any:
+		if m2, ok := src.(map[int32]any); ok {
+			for k, v := range m2 {
+				m[k] = v
+			}
+		}
+		return m, nil
+	case []any:
+		if m2, ok := src.([]any); ok {
+			m = append(m, m2...)
+		}
+		return m, nil
+	default:
+		return dst, fmt.Errorf("unsupported type: %T", dst)
+	}
 }
 
 func rangeSheetData(sheetData any, columnName, refKeyName string, fn func(checkId int32)) {
