@@ -99,5 +99,4 @@ message Test {
 ```
 
 ## TODO:
-- 热更新时,配置采用增量加载
 - 导出protobuf二进制数据
