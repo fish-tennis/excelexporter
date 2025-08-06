@@ -6,6 +6,7 @@ require (
 	github.com/jhump/protoreflect v1.17.0
 	github.com/xuri/excelize/v2 v2.7.0
 	google.golang.org/protobuf v1.34.2
+	gopkg.in/yaml.v3 v3.0.1
 )
 
 require (

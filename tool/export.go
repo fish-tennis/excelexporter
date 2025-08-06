@@ -6,22 +6,29 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/xuri/excelize/v2"
+	"gopkg.in/yaml.v3"
 	"os"
 	"strings"
 )
 
 // 导出设置项
 type ExportOption struct {
-	DataImportPath string // Excel导入目录(excel所在目录)
-	DataExportPath string // 数据导出目录
-	Md5ExportPath  string // 可选项:导出md5文件完整路径
+	DataImportPath string `yaml:"DataImportPath"` // Excel导入目录(excel所在目录)
+	DataExportPath string `yaml:"DataExportPath"` // 数据导出目录
+	Md5ExportPath  string `yaml:"Md5ExportPath"`  // 可选项:导出md5文件完整路径
 
-	CodeTemplatePath  string   // 代码模板目录
-	CodeExportPath    string   // 代码导出目录
-	CodeTemplateFiles []string // 代码模板
+	CodeTemplatePath  string   `yaml:"CodeTemplatePath"`  // 代码模板目录
+	CodeExportPath    string   `yaml:"CodeExportPath"`    // 代码导出目录
+	CodeTemplateFiles []string `yaml:"CodeTemplateFiles"` // 代码模板
 
-	ExportGroup  string // 导出分组标记 c s cs
-	DefaultGroup string // 默认的分组标记
+	ExportGroup  string `yaml:"ExportGroup"`  // 导出分组标记 c s cs
+	DefaultGroup string `yaml:"DefaultGroup"` // 默认的分组标记
+
+	ExportAllExcelFile string `yaml:"ExportAllExcelFile"` // 导出总表的文件名
+	ExportAllSheet     string `yaml:"ExportAllSheet"`     // 导出总表的sheet名
+
+	ProtoPath  string   `yaml:"ProtoPath"`  // proto所在目录
+	ProtoFiles []string `yaml:"ProtoFiles"` // 需要解析的proto文件
 }
 
 type ExportInfo struct {
@@ -33,6 +40,7 @@ type ExportInfo struct {
 
 // 从一个总表导出所有的配置表
 func ExportAll(exportOption *ExportOption, exportExcelFileName, exportSheetName string) error {
+	checkExportOption(exportOption)
 	f, err := excelize.OpenFile(exportOption.DataImportPath + exportExcelFileName)
 	if err != nil {
 		fmt.Println(err)
@@ -295,4 +303,42 @@ func GetMd5(bytes []byte) string {
 	md5Ctx.Write(bytes)
 	cipherStr := md5Ctx.Sum(nil)
 	return hex.EncodeToString(cipherStr)
+}
+
+func ExportByConfig(configFile string) error {
+	fileData, err := os.ReadFile(configFile)
+	if err != nil {
+		panic("read config file err")
+	}
+	options := &ExportOption{}
+	err = yaml.Unmarshal(fileData, options)
+	if err != nil {
+		panic(err)
+	}
+	if len(options.ProtoFiles) > 0 {
+		err = ParseProtoFile([]string{options.ProtoPath}, options.ProtoFiles...)
+		if err != nil {
+			fmt.Println(err)
+			return err
+		}
+	}
+	err = ExportAll(options, options.ExportAllExcelFile, options.ExportAllSheet)
+	return err
+}
+
+func checkExportOption(opt *ExportOption) {
+	autoCheckDir(&opt.DataImportPath)
+	autoCheckDir(&opt.DataExportPath)
+	autoCheckDir(&opt.CodeTemplatePath)
+	autoCheckDir(&opt.CodeExportPath)
+	autoCheckDir(&opt.ProtoPath)
+}
+
+func autoCheckDir(dir *string) {
+	if *dir == "" {
+		return
+	}
+	if !strings.HasSuffix(*dir, "/") {
+		*dir = *dir + "/"
+	}
 }

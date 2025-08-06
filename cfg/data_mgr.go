@@ -16,6 +16,21 @@ var (
     //任务数据
     Quests *DataMap[*pb.QuestCfg]
     
+    //
+    ActivityCfgs *DataMap[*pb.ActivityCfg]
+    
+    //
+    ConditionTemplateCfgs *DataMap[*pb.ConditionTemplateCfg]
+    
+    //
+    ExchangeCfgs *DataMap[*pb.ExchangeCfg]
+    
+    //
+    ProgressTemplateCfgs *DataMap[*pb.ProgressTemplateCfg]
+    
+    //
+    
+    LevelExps *DataSlice[*pb.LevelExp]
     
 )
 
@@ -61,6 +76,91 @@ func Load(dataDir string, processFn func(mgr any, mgrName,messageName,fileName s
         }
         // 最后再赋值给全局变量(引用赋值是原子操作)
         Quests = tmpQuests
+    }
+    if filter == nil || filter("activitycfg.json") {
+        // 考虑到并发安全,这里先加载到临时变量
+        tmpActivityCfgs := NewDataMap[*pb.ActivityCfg]()
+        err = tmpActivityCfgs.LoadJson(dataDir+"activitycfg.json")
+        if err != nil {
+            return err
+        }
+        if processFn != nil {
+            // 预处理数据
+            err = processFn(tmpActivityCfgs, "ActivityCfgs", "ActivityCfg", "activitycfg.json")
+            if err != nil {
+                return err
+            }
+        }
+        // 最后再赋值给全局变量(引用赋值是原子操作)
+        ActivityCfgs = tmpActivityCfgs
+    }
+    if filter == nil || filter("condition_template.json") {
+        // 考虑到并发安全,这里先加载到临时变量
+        tmpConditionTemplateCfgs := NewDataMap[*pb.ConditionTemplateCfg]()
+        err = tmpConditionTemplateCfgs.LoadJson(dataDir+"condition_template.json")
+        if err != nil {
+            return err
+        }
+        if processFn != nil {
+            // 预处理数据
+            err = processFn(tmpConditionTemplateCfgs, "ConditionTemplateCfgs", "ConditionTemplateCfg", "condition_template.json")
+            if err != nil {
+                return err
+            }
+        }
+        // 最后再赋值给全局变量(引用赋值是原子操作)
+        ConditionTemplateCfgs = tmpConditionTemplateCfgs
+    }
+    if filter == nil || filter("exchange.json") {
+        // 考虑到并发安全,这里先加载到临时变量
+        tmpExchangeCfgs := NewDataMap[*pb.ExchangeCfg]()
+        err = tmpExchangeCfgs.LoadJson(dataDir+"exchange.json")
+        if err != nil {
+            return err
+        }
+        if processFn != nil {
+            // 预处理数据
+            err = processFn(tmpExchangeCfgs, "ExchangeCfgs", "ExchangeCfg", "exchange.json")
+            if err != nil {
+                return err
+            }
+        }
+        // 最后再赋值给全局变量(引用赋值是原子操作)
+        ExchangeCfgs = tmpExchangeCfgs
+    }
+    if filter == nil || filter("progress_template.json") {
+        // 考虑到并发安全,这里先加载到临时变量
+        tmpProgressTemplateCfgs := NewDataMap[*pb.ProgressTemplateCfg]()
+        err = tmpProgressTemplateCfgs.LoadJson(dataDir+"progress_template.json")
+        if err != nil {
+            return err
+        }
+        if processFn != nil {
+            // 预处理数据
+            err = processFn(tmpProgressTemplateCfgs, "ProgressTemplateCfgs", "ProgressTemplateCfg", "progress_template.json")
+            if err != nil {
+                return err
+            }
+        }
+        // 最后再赋值给全局变量(引用赋值是原子操作)
+        ProgressTemplateCfgs = tmpProgressTemplateCfgs
+    }
+    if filter == nil || filter("levelcfg.json") {
+        // 考虑到并发安全,这里先加载到临时变量
+        tmpLevelExps := &DataSlice[*pb.LevelExp]{}
+        err = tmpLevelExps.LoadJson(dataDir+"levelcfg.json")
+        if err != nil {
+            return err
+        }
+        if processFn != nil {
+            // 预处理数据
+            err = processFn(tmpLevelExps, "LevelExps", "LevelExp", "levelcfg.json")
+            if err != nil {
+                return err
+            }
+        }
+        // 最后再赋值给全局变量(引用赋值是原子操作)
+        LevelExps = tmpLevelExps
     }
     return err
 }
