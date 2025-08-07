@@ -4,6 +4,7 @@ import (
 	"crypto/md5"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"github.com/xuri/excelize/v2"
 	"gopkg.in/yaml.v3"
@@ -46,21 +47,13 @@ func ExportAll(exportOption *ExportOption, exportExcelFileName, exportSheetName 
 		fmt.Println(fmt.Sprintf("open excel err:%v file:%v", err, exportOption.DataImportPath+exportExcelFileName))
 		return err
 	}
-	exportSheetOption := &SheetOption{
-		SheetName:   exportSheetName,
-		MessageName: "ExportCfg",
-		MgrType:     "slice",
-	}
-	exportGroup := exportOption.ExportGroup
-	exportOption.ExportGroup = "" // 总表没有单独设置分组标记的行
-	sheets, err := ConvertSheet(exportOption, f, exportSheetOption)
+	sheets, err := parseExportSheets(exportOption.DataImportPath+exportExcelFileName, exportSheetName)
 	f.Close()
 	if err != nil {
 		fmt.Println(fmt.Sprintf("ConvertSheetErr err:%v sheet:%v", err, exportSheetName))
 		return err
 	}
-	fmt.Println(fmt.Sprintf("parse excel:%v sheet:%v", exportExcelFileName, exportSheetName))
-	exportOption.ExportGroup = exportGroup
+	fmt.Println(fmt.Sprintf("parseExportSheets excel:%v sheet:%v count:%v", exportExcelFileName, exportSheetName, len(sheets)))
 	getMapValueFn := func(strMap map[string]any, key, defaultValue string) string {
 		if v, ok := strMap[key]; ok {
 			str := strings.TrimSpace(v.(string))
@@ -76,7 +69,7 @@ func ExportAll(exportOption *ExportOption, exportExcelFileName, exportSheetName 
 	}
 	exportInfoMap := make(map[string]*ExportInfo)
 	orderNames := make([]string, 0)
-	for _, v := range sheets.([]any) {
+	for _, v := range sheets {
 		exportCfg := v.(map[string]any)
 		sheetName := getMapValueFn(exportCfg, "Sheet", "")
 		sheetExportGroup := getMapValueFn(exportCfg, "ExportGroup", exportOption.DefaultGroup)
@@ -361,4 +354,92 @@ func autoCheckDir(dir *string) {
 	if !strings.HasSuffix(*dir, "/") && !strings.HasSuffix(*dir, "\\") {
 		*dir = *dir + "/"
 	}
+}
+
+func parseExportSheets(excel, exportSheetName string) ([]any, error) {
+	f, err := excelize.OpenFile(excel)
+	if err != nil {
+		fmt.Println(fmt.Sprintf("open excel err:%v file:%v", err, excel))
+		return nil, err
+	}
+	sheets, err := parseExportSheetsFromFile(f, exportSheetName)
+	f.Close()
+	if err != nil {
+		fmt.Println(fmt.Sprintf("ConvertSheetErr err:%v sheet:%v", err, exportSheetName))
+		return nil, err
+	}
+	fmt.Println(fmt.Sprintf("parseExportSheets excel:%v sheet:%v", excel, exportSheetName))
+	return sheets, err
+}
+
+// 解析导出总表
+func parseExportSheetsFromFile(excelFile *excelize.File, exportSheetName string) ([]any, error) {
+	opt := &SheetOption{
+		SheetName: exportSheetName,
+		MgrType:   "slice",
+	}
+	rows, err := excelFile.Rows(opt.SheetName)
+	if err != nil {
+		fmt.Println(fmt.Sprintf("sheet:%v err:%v", opt.SheetName, err))
+		return nil, err
+	}
+	defer func() {
+		if err = rows.Close(); err != nil {
+			fmt.Println(fmt.Sprintf("sheet:%v err:%v", opt.SheetName, err))
+		}
+	}()
+	opt.ColumnOpts = make([]*ColumnOption, 0)
+	s := make([]any, 0)
+	rowIdx := -1
+	for rows.Next() {
+		rowIdx++
+		row, err := rows.Columns()
+		if err != nil {
+			fmt.Println(fmt.Sprintf("sheet:%v err:%v", opt.SheetName, err))
+			return nil, err
+		}
+		if len(row) == 0 {
+			fmt.Println(fmt.Sprintf("empty row, sheet:%v", opt.SheetName))
+			continue
+		}
+		column0 := strings.TrimSpace(row[0])
+		// 解析字段列名
+		// 特殊标记的##var的列或者第一行非#开始的行就是列名定义行
+		if len(opt.ColumnOpts) == 0 && isColumnNameDefineRow(column0) {
+			// 列名
+			columnNames := row
+			//fmt.Println("columnNames:")
+			//fmt.Println(columnNames)
+			for columnIndex, columnName := range columnNames {
+				columnName = strings.TrimSpace(columnName)
+				// 跳过注释列
+				if columnName == "" || strings.HasPrefix(columnName, "#") {
+					continue
+				}
+				columnOpt := ConvertColumnOption(columnName)
+				if columnOpt == nil {
+					return nil, errors.New(fmt.Sprintf("columnName err %v sheet:%v", columnName, opt.SheetName))
+				}
+				columnOpt.ColumnIndex = columnIndex
+				opt.ColumnOpts = append(opt.ColumnOpts, columnOpt)
+			}
+			//fmt.Println(fmt.Sprintf("keyName:%v keyType:%v", opt.MapKeyName, opt.MapKeyType))
+			continue
+		}
+		// 跳过非数据行
+		if strings.HasPrefix(column0, "#") {
+			continue
+		}
+		// 解析数据行
+		rowValue := make(map[string]any)
+		for _, columnOpt := range opt.ColumnOpts {
+			if columnOpt.ColumnIndex >= len(row) {
+				continue // 跳过空的cell
+			}
+			cell := strings.TrimSpace(row[columnOpt.ColumnIndex]) // 移除首尾的空字符串
+			rowValue[columnOpt.Name] = cell
+		}
+		s = append(s, rowValue)
+	}
+	return s, nil
 }
