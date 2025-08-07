@@ -13,5 +13,7 @@ func main() {
 	err := tool.ExportByConfig(configFile)
 	if err != nil {
 		fmt.Println(fmt.Sprintf("err:%v", err))
+	} else {
+		fmt.Println("Export Success")
 	}
 }

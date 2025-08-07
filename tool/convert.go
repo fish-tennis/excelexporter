@@ -97,7 +97,7 @@ func ConvertColumnOption(cell string) *ColumnOption {
 func ConvertSheet(exportOption *ExportOption, excelFile *excelize.File, opt *SheetOption) (any, error) {
 	msgDesc := FindMessageDescriptor(opt.MessageName)
 	if msgDesc == nil {
-		return nil, fmt.Errorf("message %s not found", opt.MessageName)
+		return nil, fmt.Errorf("message %s not found, sheet:%v", opt.MessageName, opt.SheetName)
 	}
 	var mapKeyFieldDesc *desc.FieldDescriptor
 	if opt.MgrType == "map" {
@@ -111,12 +111,12 @@ func ConvertSheet(exportOption *ExportOption, excelFile *excelize.File, opt *She
 	}
 	rows, err := excelFile.Rows(opt.SheetName)
 	if err != nil {
-		fmt.Println(err)
+		fmt.Println(fmt.Sprintf("sheet:%v err:%v", opt.SheetName, err))
 		return nil, err
 	}
 	defer func() {
 		if err = rows.Close(); err != nil {
-			fmt.Println(err)
+			fmt.Println(fmt.Sprintf("sheet:%v err:%v", opt.SheetName, err))
 		}
 	}()
 	hasParseExportGroupRow := false
@@ -128,11 +128,11 @@ func ConvertSheet(exportOption *ExportOption, excelFile *excelize.File, opt *She
 		rowIdx++
 		row, err := rows.Columns()
 		if err != nil {
-			fmt.Println(err)
+			fmt.Println(fmt.Sprintf("sheet:%v err:%v", opt.SheetName, err))
 			return nil, err
 		}
 		if len(row) == 0 {
-			fmt.Println("empty row")
+			fmt.Println(fmt.Sprintf("empty row, sheet:%v", opt.SheetName))
 			continue
 		}
 		column0 := strings.TrimSpace(row[0])
@@ -151,7 +151,7 @@ func ConvertSheet(exportOption *ExportOption, excelFile *excelize.File, opt *She
 				}
 				columnOpt := ConvertColumnOption(columnName)
 				if columnOpt == nil {
-					return nil, errors.New(fmt.Sprintf("columnName err %v", columnName))
+					return nil, errors.New(fmt.Sprintf("columnName err %v sheet:%v", columnName, opt.SheetName))
 				}
 				columnOpt.ColumnIndex = columnIndex
 				opt.ColumnOpts = append(opt.ColumnOpts, columnOpt)
@@ -167,7 +167,7 @@ func ConvertSheet(exportOption *ExportOption, excelFile *excelize.File, opt *She
 					}
 				}
 			}
-			fmt.Println(fmt.Sprintf("keyName:%v keyType:%v", opt.MapKeyName, opt.MapKeyType))
+			//fmt.Println(fmt.Sprintf("keyName:%v keyType:%v", opt.MapKeyName, opt.MapKeyType))
 			continue
 		}
 		// 解析导出分组标记
@@ -197,7 +197,7 @@ func ConvertSheet(exportOption *ExportOption, excelFile *excelize.File, opt *She
 			}
 			fieldDesc := FindFieldDescriptor(msgDesc, columnOpt.Name)
 			if fieldDesc == nil {
-				fmt.Println(fmt.Sprintf("FieldNameNotFound row%v name:%s", rowIdx, columnOpt.Name))
+				fmt.Println(fmt.Sprintf("FieldNameNotFound row%v name:%s sheet:%v", rowIdx, columnOpt.Name, opt.SheetName))
 				continue
 			}
 			if columnOpt.ColumnIndex >= len(row) {
@@ -212,13 +212,13 @@ func ConvertSheet(exportOption *ExportOption, excelFile *excelize.File, opt *She
 				}
 				err = SetFieldValueJson(rowValue, fieldDesc, columnOpt, cell)
 				if err != nil {
-					fmt.Println(fmt.Sprintf("SetFieldValueJsonErr row%v err:%v", rowIdx, err))
+					fmt.Println(fmt.Sprintf("SetFieldValueJsonErr row%v sheet:%v err:%v", rowIdx, opt.SheetName, err))
 					continue
 				}
 			} else {
 				err = SetFieldValue(rowValue, fieldDesc, columnOpt, cell)
 				if err != nil {
-					fmt.Println(fmt.Sprintf("SetFieldValueErr row%v err:%v", rowIdx, err))
+					fmt.Println(fmt.Sprintf("SetFieldValueErr row%v sheet:%v err:%v", rowIdx, opt.SheetName, err))
 					continue
 				}
 			}
@@ -226,14 +226,13 @@ func ConvertSheet(exportOption *ExportOption, excelFile *excelize.File, opt *She
 		if opt.MgrType == "map" {
 			keyValue := rowValue[opt.MapKeyName]
 			if keyValue == nil {
-				fmt.Println(fmt.Sprintf("row%v key %s not found", rowIdx, opt.MapKeyName))
+				fmt.Println(fmt.Sprintf("row%v sheet:%v key %s not found", rowIdx, opt.SheetName, opt.MapKeyName))
 				continue
 			}
 			m[keyValue] = rowValue
 		} else if opt.MgrType == "slice" {
 			s = append(s, rowValue)
 		}
-		fmt.Println()
 	}
 	if opt.MgrType == "map" {
 		// 把key转换成实际类型
@@ -241,7 +240,7 @@ func ConvertSheet(exportOption *ExportOption, excelFile *excelize.File, opt *She
 	} else if opt.MgrType == "slice" {
 		return s, nil
 	}
-	return nil, errors.New("unsupported MgrType")
+	return nil, errors.New(fmt.Sprintf("unsupported MgrType %v sheet:%v", opt.MgrType, opt.SheetName))
 }
 
 func isColumnNameDefineRow(column0 string) bool {

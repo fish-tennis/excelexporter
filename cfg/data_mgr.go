@@ -14,26 +14,26 @@ var (
     isLoading   = int32(0)
     register = &processRegister{}
 
-    //物品数据
-    ItemCfgs *DataMap[*pb.ItemCfg]
-    
     //成就数据(成就是任务的一种)
     Quests *DataMap[*pb.QuestCfg]
     
     //
     
     LevelExps *DataSlice[*pb.LevelExp]
+    //物品数据
+    ItemCfgs *DataMap[*pb.ItemCfg]
+    
     
 )
 
 // 预处理接口注册
 type processRegister struct {
-    ItemCfgsProcess func(mgr *DataMap[*pb.ItemCfg]) error
-    
     QuestsProcess func(mgr *DataMap[*pb.QuestCfg]) error
     
     
     LevelExpsProcess func(mgr *DataSlice[*pb.LevelExp]) error
+    ItemCfgsProcess func(mgr *DataMap[*pb.ItemCfg]) error
+    
     
 }
 
@@ -49,16 +49,6 @@ func Load(dataDir string, filter func(fileName string) bool) error {
     }
     var err error
     
-    if filter == nil || filter("ItemCfg.json") {
-        // 考虑到并发安全,这里先加载到临时变量
-        tmpItemCfgs := NewDataMap[*pb.ItemCfg]()
-        err = tmpItemCfgs.LoadJson(dataDir+"ItemCfg.json")
-        if err != nil {
-            return err
-        }
-        // 最后再赋值给全局变量(引用赋值是原子操作)
-        ItemCfgs = tmpItemCfgs
-    }
     if filter == nil || filter("Quests.json") {
         // 考虑到并发安全,这里先加载到临时变量
         tmpQuests := NewDataMap[*pb.QuestCfg]()
@@ -79,14 +69,17 @@ func Load(dataDir string, filter func(fileName string) bool) error {
         // 最后再赋值给全局变量(引用赋值是原子操作)
         LevelExps = tmpLevelExps
     }
-
-    if register.ItemCfgsProcess != nil {
-        // 预处理数据
-        err = register.ItemCfgsProcess(ItemCfgs)
+    if filter == nil || filter("ItemCfg.json") {
+        // 考虑到并发安全,这里先加载到临时变量
+        tmpItemCfgs := NewDataMap[*pb.ItemCfg]()
+        err = tmpItemCfgs.LoadJson(dataDir+"ItemCfg.json")
         if err != nil {
             return err
         }
+        // 最后再赋值给全局变量(引用赋值是原子操作)
+        ItemCfgs = tmpItemCfgs
     }
+
     if register.QuestsProcess != nil {
         // 预处理数据
         err = register.QuestsProcess(Quests)
@@ -97,6 +90,13 @@ func Load(dataDir string, filter func(fileName string) bool) error {
     if register.LevelExpsProcess != nil {
         // 预处理数据
         err = register.LevelExpsProcess(LevelExps)
+        if err != nil {
+            return err
+        }
+    }
+    if register.ItemCfgsProcess != nil {
+        // 预处理数据
+        err = register.ItemCfgsProcess(ItemCfgs)
         if err != nil {
             return err
         }

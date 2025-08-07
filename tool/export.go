@@ -43,7 +43,7 @@ func ExportAll(exportOption *ExportOption, exportExcelFileName, exportSheetName 
 	checkExportOption(exportOption)
 	f, err := excelize.OpenFile(exportOption.DataImportPath + exportExcelFileName)
 	if err != nil {
-		fmt.Println(err)
+		fmt.Println(fmt.Sprintf("open excel err:%v file:%v", err, exportOption.DataImportPath+exportExcelFileName))
 		return err
 	}
 	exportSheetOption := &SheetOption{
@@ -54,11 +54,11 @@ func ExportAll(exportOption *ExportOption, exportExcelFileName, exportSheetName 
 	exportGroup := exportOption.ExportGroup
 	exportOption.ExportGroup = "" // 总表没有单独设置分组标记的行
 	sheets, err := ConvertSheet(exportOption, f, exportSheetOption)
+	f.Close()
 	if err != nil {
-		fmt.Println(fmt.Sprintf("ExportAllErr err:%v", err))
+		fmt.Println(fmt.Sprintf("ConvertSheetErr err:%v sheet:%v", err, exportSheetName))
 		return err
 	}
-	f.Close()
 	exportOption.ExportGroup = exportGroup
 	getMapValueFn := func(strMap map[string]any, key, defaultValue string) string {
 		if v, ok := strMap[key]; ok {
@@ -97,12 +97,13 @@ func ExportAll(exportOption *ExportOption, exportExcelFileName, exportSheetName 
 		excelFileName := getMapValueFn(exportCfg, "Excel", "")
 		f, err = excelize.OpenFile(exportOption.DataImportPath + excelFileName)
 		if err != nil {
-			fmt.Println(err)
+			fmt.Println(fmt.Sprintf("open excel err:%v file:%v", err, exportOption.DataImportPath+excelFileName))
 			return err
 		}
 		sheetData, err := ConvertSheet(exportOption, f, sheetOption)
 		f.Close()
 		if err != nil {
+			fmt.Println(fmt.Sprintf("ConvertSheetErr err:%v sheet:%v", err, sheetOption.SheetName))
 			return err
 		}
 		if mergeName == "" {
@@ -115,7 +116,7 @@ func ExportAll(exportOption *ExportOption, exportExcelFileName, exportSheetName 
 			if mergeInfo, ok := exportInfoMap[mergeName]; ok {
 				mergeData, err := mergeMgrData(mergeInfo.MgrData, sheetData)
 				if err != nil {
-					fmt.Println(fmt.Sprintf("ExportAllErr excel:%v sheet:%v merge:%v err:%v",
+					fmt.Println(fmt.Sprintf("mergeMgrDataErr excel:%v sheet:%v merge:%v err:%v",
 						excelFileName, sheetName, mergeName, err))
 					return err
 				}
@@ -308,17 +309,19 @@ func GetMd5(bytes []byte) string {
 func ExportByConfig(configFile string) error {
 	fileData, err := os.ReadFile(configFile)
 	if err != nil {
-		panic("read config file err")
+		fmt.Println(fmt.Sprintf("read config err:%v file:%v", err, configFile))
+		return err
 	}
 	options := &ExportOption{}
 	err = yaml.Unmarshal(fileData, options)
 	if err != nil {
-		panic(err)
+		fmt.Println(fmt.Sprintf("parse yaml config err:%v file:%v", err, configFile))
+		return err
 	}
 	if len(options.ProtoFiles) > 0 {
 		err = ParseProtoFile([]string{options.ProtoPath}, options.ProtoFiles...)
 		if err != nil {
-			fmt.Println(err)
+			fmt.Println(fmt.Sprintf("ParseProtoFile err:%v", err))
 			return err
 		}
 	}
@@ -338,7 +341,7 @@ func autoCheckDir(dir *string) {
 	if *dir == "" {
 		return
 	}
-	if !strings.HasSuffix(*dir, "/") {
+	if !strings.HasSuffix(*dir, "/") && !strings.HasSuffix(*dir, "\\") {
 		*dir = *dir + "/"
 	}
 }
