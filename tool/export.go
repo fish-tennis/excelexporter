@@ -59,6 +59,7 @@ func ExportAll(exportOption *ExportOption, exportExcelFileName, exportSheetName 
 		fmt.Println(fmt.Sprintf("ConvertSheetErr err:%v sheet:%v", err, exportSheetName))
 		return err
 	}
+	fmt.Println(fmt.Sprintf("parse excel:%v sheet:%v", exportExcelFileName, exportSheetName))
 	exportOption.ExportGroup = exportGroup
 	getMapValueFn := func(strMap map[string]any, key, defaultValue string) string {
 		if v, ok := strMap[key]; ok {
@@ -74,6 +75,7 @@ func ExportAll(exportOption *ExportOption, exportExcelFileName, exportSheetName 
 		generateInfo.TemplateFiles = append(generateInfo.TemplateFiles, exportOption.CodeTemplatePath+templateFile)
 	}
 	exportInfoMap := make(map[string]*ExportInfo)
+	orderNames := make([]string, 0)
 	for _, v := range sheets.([]any) {
 		exportCfg := v.(map[string]any)
 		sheetName := getMapValueFn(exportCfg, "Sheet", "")
@@ -106,12 +108,14 @@ func ExportAll(exportOption *ExportOption, exportExcelFileName, exportSheetName 
 			fmt.Println(fmt.Sprintf("ConvertSheetErr err:%v sheet:%v", err, sheetOption.SheetName))
 			return err
 		}
+		fmt.Println(fmt.Sprintf("parse excel:%v sheet:%v", excelFileName, sheetOption.SheetName))
 		if mergeName == "" {
 			exportInfoMap[sheetName] = &ExportInfo{
 				MgrData:     sheetData,
 				SheetOption: sheetOption,
 				CodeComment: codeComment,
 			}
+			orderNames = append(orderNames, sheetName)
 		} else {
 			if mergeInfo, ok := exportInfoMap[mergeName]; ok {
 				mergeData, err := mergeMgrData(mergeInfo.MgrData, sheetData)
@@ -121,6 +125,7 @@ func ExportAll(exportOption *ExportOption, exportExcelFileName, exportSheetName 
 					return err
 				}
 				mergeInfo.MgrData = mergeData
+				fmt.Println(fmt.Sprintf("merge:%v excel:%v sheet:%v", mergeName, excelFileName, sheetOption.SheetName))
 			} else {
 				exportInfoMap[mergeName] = &ExportInfo{
 					MgrData:     sheetData,
@@ -128,9 +133,11 @@ func ExportAll(exportOption *ExportOption, exportExcelFileName, exportSheetName 
 					MergeName:   mergeName,
 					CodeComment: codeComment,
 				}
+				orderNames = append(orderNames, mergeName)
 			}
 		}
 	}
+
 	// 导出
 	md5Map := make(map[string]string)
 	for _, exportInfo := range exportInfoMap {
@@ -153,17 +160,6 @@ func ExportAll(exportOption *ExportOption, exportExcelFileName, exportSheetName 
 			return err
 		}
 		md5Map[exportFileName] = GetMd5(jsonData)
-		mgrName := exportInfo.SheetOption.MessageName + "s"
-		if exportInfo.MergeName != "" {
-			mgrName = exportInfo.MergeName
-		}
-		generateInfo.AddDataMgrInfo(&DataMgrInfo{
-			MessageName: exportInfo.SheetOption.MessageName,
-			MgrName:     mgrName,
-			MgrType:     exportInfo.SheetOption.MgrType,
-			FileName:    exportFileName,
-			CodeComment: exportInfo.CodeComment,
-		})
 	}
 	if exportOption.Md5ExportPath != "" {
 		// 导出文件md5码
@@ -178,7 +174,28 @@ func ExportAll(exportOption *ExportOption, exportExcelFileName, exportSheetName 
 			return err
 		}
 	}
+
 	// 生成代码
+	for _, name := range orderNames {
+		exportInfo := exportInfoMap[name]
+		exportFileName := ""
+		if exportInfo.MergeName == "" {
+			exportFileName = fmt.Sprintf("%s.json", exportInfo.SheetOption.SheetName)
+		} else {
+			exportFileName = fmt.Sprintf("%s.json", exportInfo.MergeName)
+		}
+		mgrName := exportInfo.SheetOption.MessageName + "s"
+		if exportInfo.MergeName != "" {
+			mgrName = exportInfo.MergeName
+		}
+		generateInfo.AddDataMgrInfo(&DataMgrInfo{
+			MessageName: exportInfo.SheetOption.MessageName,
+			MgrName:     mgrName,
+			MgrType:     exportInfo.SheetOption.MgrType,
+			FileName:    exportFileName,
+			CodeComment: exportInfo.CodeComment,
+		})
+	}
 	err = GenerateCode(generateInfo, exportOption.CodeExportPath)
 	if err != nil {
 		fmt.Println(fmt.Sprintf("GenerateCodeErr err:%v", err))
