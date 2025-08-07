@@ -4,29 +4,21 @@ package cfg
 import (
     "errors"
     "excelexporter/example/pb"
+    "path/filepath"
+    "strings"
     "sync/atomic"
 )
 
 var (
     ErrLoadingConcurrency = errors.New("loading concurrency")
     isLoading   = int32(0)
+    register = &processRegister{}
+
     //物品数据
     ItemCfgs *DataMap[*pb.ItemCfg]
     
-    //任务数据
+    //成就数据(成就是任务的一种)
     Quests *DataMap[*pb.QuestCfg]
-    
-    //
-    ActivityCfgs *DataMap[*pb.ActivityCfg]
-    
-    //
-    ConditionTemplateCfgs *DataMap[*pb.ConditionTemplateCfg]
-    
-    //
-    ExchangeCfgs *DataMap[*pb.ExchangeCfg]
-    
-    //
-    ProgressTemplateCfgs *DataMap[*pb.ProgressTemplateCfg]
     
     //
     
@@ -34,13 +26,27 @@ var (
     
 )
 
-// processFn:预处理接口
+// 预处理接口注册
+type processRegister struct {
+    ItemCfgsProcess func(mgr *DataMap[*pb.ItemCfg]) error
+    
+    QuestsProcess func(mgr *DataMap[*pb.QuestCfg]) error
+    
+    
+    LevelExpsProcess func(mgr *DataSlice[*pb.LevelExp]) error
+    
+}
+
 // filter:过滤接口,返回false则不加载该文件
-func Load(dataDir string, processFn func(mgr any, mgrName,messageName,fileName string) error, filter func(fileName string) bool) error {
+func Load(dataDir string, filter func(fileName string) bool) error {
     if !atomic.CompareAndSwapInt32(&isLoading, 0, 1) {
         return ErrLoadingConcurrency
     }
     defer atomic.StoreInt32(&isLoading, 0)
+    dataDir = filepath.ToSlash(dataDir)
+    if strings.LastIndexByte(dataDir, filepath.Separator) != len(dataDir)-1 {
+        dataDir += string(filepath.Separator)
+    }
     var err error
     
     if filter == nil || filter("ItemCfg.json") {
@@ -49,13 +55,6 @@ func Load(dataDir string, processFn func(mgr any, mgrName,messageName,fileName s
         err = tmpItemCfgs.LoadJson(dataDir+"ItemCfg.json")
         if err != nil {
             return err
-        }
-        if processFn != nil {
-            // 预处理数据
-            err = processFn(tmpItemCfgs, "ItemCfgs", "ItemCfg", "ItemCfg.json")
-            if err != nil {
-                return err
-            }
         }
         // 最后再赋值给全局变量(引用赋值是原子操作)
         ItemCfgs = tmpItemCfgs
@@ -67,83 +66,8 @@ func Load(dataDir string, processFn func(mgr any, mgrName,messageName,fileName s
         if err != nil {
             return err
         }
-        if processFn != nil {
-            // 预处理数据
-            err = processFn(tmpQuests, "Quests", "QuestCfg", "Quests.json")
-            if err != nil {
-                return err
-            }
-        }
         // 最后再赋值给全局变量(引用赋值是原子操作)
         Quests = tmpQuests
-    }
-    if filter == nil || filter("activitycfg.json") {
-        // 考虑到并发安全,这里先加载到临时变量
-        tmpActivityCfgs := NewDataMap[*pb.ActivityCfg]()
-        err = tmpActivityCfgs.LoadJson(dataDir+"activitycfg.json")
-        if err != nil {
-            return err
-        }
-        if processFn != nil {
-            // 预处理数据
-            err = processFn(tmpActivityCfgs, "ActivityCfgs", "ActivityCfg", "activitycfg.json")
-            if err != nil {
-                return err
-            }
-        }
-        // 最后再赋值给全局变量(引用赋值是原子操作)
-        ActivityCfgs = tmpActivityCfgs
-    }
-    if filter == nil || filter("condition_template.json") {
-        // 考虑到并发安全,这里先加载到临时变量
-        tmpConditionTemplateCfgs := NewDataMap[*pb.ConditionTemplateCfg]()
-        err = tmpConditionTemplateCfgs.LoadJson(dataDir+"condition_template.json")
-        if err != nil {
-            return err
-        }
-        if processFn != nil {
-            // 预处理数据
-            err = processFn(tmpConditionTemplateCfgs, "ConditionTemplateCfgs", "ConditionTemplateCfg", "condition_template.json")
-            if err != nil {
-                return err
-            }
-        }
-        // 最后再赋值给全局变量(引用赋值是原子操作)
-        ConditionTemplateCfgs = tmpConditionTemplateCfgs
-    }
-    if filter == nil || filter("exchange.json") {
-        // 考虑到并发安全,这里先加载到临时变量
-        tmpExchangeCfgs := NewDataMap[*pb.ExchangeCfg]()
-        err = tmpExchangeCfgs.LoadJson(dataDir+"exchange.json")
-        if err != nil {
-            return err
-        }
-        if processFn != nil {
-            // 预处理数据
-            err = processFn(tmpExchangeCfgs, "ExchangeCfgs", "ExchangeCfg", "exchange.json")
-            if err != nil {
-                return err
-            }
-        }
-        // 最后再赋值给全局变量(引用赋值是原子操作)
-        ExchangeCfgs = tmpExchangeCfgs
-    }
-    if filter == nil || filter("progress_template.json") {
-        // 考虑到并发安全,这里先加载到临时变量
-        tmpProgressTemplateCfgs := NewDataMap[*pb.ProgressTemplateCfg]()
-        err = tmpProgressTemplateCfgs.LoadJson(dataDir+"progress_template.json")
-        if err != nil {
-            return err
-        }
-        if processFn != nil {
-            // 预处理数据
-            err = processFn(tmpProgressTemplateCfgs, "ProgressTemplateCfgs", "ProgressTemplateCfg", "progress_template.json")
-            if err != nil {
-                return err
-            }
-        }
-        // 最后再赋值给全局变量(引用赋值是原子操作)
-        ProgressTemplateCfgs = tmpProgressTemplateCfgs
     }
     if filter == nil || filter("levelcfg.json") {
         // 考虑到并发安全,这里先加载到临时变量
@@ -152,16 +76,32 @@ func Load(dataDir string, processFn func(mgr any, mgrName,messageName,fileName s
         if err != nil {
             return err
         }
-        if processFn != nil {
-            // 预处理数据
-            err = processFn(tmpLevelExps, "LevelExps", "LevelExp", "levelcfg.json")
-            if err != nil {
-                return err
-            }
-        }
         // 最后再赋值给全局变量(引用赋值是原子操作)
         LevelExps = tmpLevelExps
     }
+
+    if register.ItemCfgsProcess != nil {
+        // 预处理数据
+        err = register.ItemCfgsProcess(ItemCfgs)
+        if err != nil {
+            return err
+        }
+    }
+    if register.QuestsProcess != nil {
+        // 预处理数据
+        err = register.QuestsProcess(Quests)
+        if err != nil {
+            return err
+        }
+    }
+    if register.LevelExpsProcess != nil {
+        // 预处理数据
+        err = register.LevelExpsProcess(LevelExps)
+        if err != nil {
+            return err
+        }
+    }
+    
     return err
 }
 

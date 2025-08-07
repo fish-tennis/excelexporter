@@ -4,15 +4,6 @@ option go_package = "./pb";
 
 package gserver;
 
-enum Color {
-  Color_None = 0;
-  Color_Red = 1;
-  Color_Green = 2;
-  Color_Blue = 3;
-  Color_Yellow = 4;
-  Color_Gray = 5;
-}
-
 // 刷新方式
 enum RefreshType {
   RefreshType_None    = 0; // 解决"The first enum value must be zero in proto3."的报错
@@ -30,12 +21,6 @@ enum TimeType {
 enum ItemType {
   ItemType_None 	= 0; // 普通物品
   ItemType_Equip  	= 1; // 装备
-}
-
-// 物品数量
-message ItemNum {
-  int32 CfgId = 1; // 物品配置id
-  int32 Num = 2; // 物品数量
 }
 
 // 物品配置
@@ -57,15 +42,6 @@ message AddElemArg {
 	int32 Source = 5; // 来源(一般用于数据分析)
 	map<string,string> Properties = 6; // 扩展属性
 	// NOTE: 有些项目有绑定属性,可以在这里加
-}
-
-// 删除元素参数
-message DelElemArg {
-	int64 UniqueId = 1; // 唯一id(删除指定的不可叠加的元素才需要)
-	int32 CfgId = 2; // 配置id
-	int32 Num = 3; // 数量
-	int32 Source = 4; // 来源(一般用于数据分析)
-	map<string,string> Properties = 5; // 扩展属性
 }
 
 // CfgId + Arg
@@ -95,94 +71,12 @@ message QuestCfg {
   repeated AddElemArg Rewards = 5; // 任务奖励
   int32 PreQuest = 6; // 前置任务
   repeated int32 NextQuests = 7; // 完成该任务后,自动接后续的任务(任务链)
-  repeated ConditionCfg Conditions = 8; // 任务条件
-  ProgressCfg Progress = 9; // 任务进度
   map<string,string> Properties = 10; // 扩展属性
   int32 Category = 11; // 任务分类(可用于客户端分类显示 如主线任务 支线任务 成就等)
   string Detail = 12; // 任务描述
 
   repeated CfgArgs ConditionTemplates = 13; // 关联的配置模板id和参数,简化配置表用,业务代码不要调用
   CfgArg ProgressTemplate = 14; // 关联的配置模板id和参数,简化配置表用,业务代码不要调用
-}
-
-// 数值比较配置
-message ValueCompareCfg {
-  string Op = 1;   // 操作符 = > >= < <= != [] ![]
-  repeated int32 Values = 2; // 比较的值(可配多个)
-}
-
-// 条件配置(ConditionTemplateCfg + Values)
-message ConditionCfg {
-  int32 Type = 1; // 条件类型(enum ConditionType)
-  string Key = 2; // 关键字,如ConditionType_PlayerPropertyCompare对应的属性名
-  string Op = 3; // 操作符 = > >= < <= != [] ![]
-  repeated int32 Values = 4; // 比较的值(可配多个)
-  map<string,string> Properties = 5; // 扩展属性
-}
-
-// 条件模板配置
-message ConditionTemplateCfg {
-  int32 CfgId = 4; // 配置id
-  int32 Type = 1; // 条件类型(enum ConditionType)
-  string Key = 2; // 关键字,如ConditionType_PlayerPropertyCompare对应的属性名
-  string Op = 3; // 操作符 = > >= < <= != [] ![]
-  map<string,string> Properties = 5; // 扩展属性
-}
-
-// 进度配置(ProgressTemplateCfg + Total)
-message ProgressCfg {
-  int32 Type = 1; // 进度类型(enum ProgressType)
-  int32 Total = 2; // 总进度要求
-  bool NeedInit = 3; // 接任务时,是否初始化一下当前进度
-  string Event = 4; // 关联的事件名
-  string ProgressField = 5; // 以事件字段值作为进度值,为空表示进度值是1
-  map<string,ValueCompareCfg> IntEventFields = 6; // 数值类型的事件字段值(支持复杂的比较操作符)
-  map<string,string> StringEventFields = 7; // 事件字段值(字符串形式)
-  map<string,string> Properties = 8; // 扩展属性
-}
-
-// 进度模板配置
-message ProgressTemplateCfg {
-  int32 CfgId = 1; // 配置id
-  int32 Type = 2; // 进度类型(enum ProgressType)
-  bool NeedInit = 3; // 接任务时,是否初始化一下当前进度
-  string Event = 4; // 关联的事件名
-  string ProgressField = 5; // 以事件字段值作为进度值,为空表示进度值是1
-  map<string,ValueCompareCfg> IntEventFields = 6; // 数值类型的事件字段值(支持复杂的比较操作符)
-  map<string,string> StringEventFields = 7; // 事件字段值(字符串形式)
-  map<string,string> Properties = 8; // 扩展属性
-}
-
-// 兑换配置
-message ExchangeCfg {
-  int32 CfgId = 1;
-  repeated ConditionCfg Conditions = 2; // 任务条件
-  repeated DelElemArg Consumes = 3; // 需要消耗的物品
-  repeated AddElemArg Rewards = 4; // 获得物品
-  int32 CountLimit = 5; // 兑换次数限制(0表示无次数限制)
-  int32 RefreshType = 6; // 刷新机制(enum RefreshType)
-  map<string,string> Properties = 7; // 扩展属性
-  repeated CfgArgs ConditionTemplates = 11; // 关联的配置模板id和参数,简化配置表用,业务代码不要调用
-}
-
-// 活动基础配置
-message ActivityCfg {
-  int32 CfgId = 1;
-  string Name = 2;
-  string Detail = 3;
-  string Template = 4; // 活动模板名
-  int32 RefreshType = 5; // 刷新机制(enum RefreshType)
-  int32 CycleType = 6; // 活动周期
-  int32 TimeType = 7; // 时间类型(enum TimeType)
-  int32 BeginTime = 8; // 开始时间(TimeType为TimeType_Timestamp时,格式是时间戳 TimeType为TimeType_Date时,格式是20240219)
-  int32 EndTime = 9; // 结束时间(TimeType为TimeType_Timestamp时,格式是时间戳 TimeType为TimeType_Date时,格式是20240219)
-  repeated int32 ExchangeIds = 10; // 兑换配置
-  bool IsOff = 11; // 是否关闭
-  bool RemoveDataWhenEnd = 12; // 活动结束时,是否删除活动数据
-  int32 MinPlayerLevel = 14; // 参与活动的最低玩家等级要求(0表示不限制)
-  int32 MaxPlayerLevel = 15; // 参与活动的最大玩家等级上限(0表示不限制)
-  repeated int32 QuestIds = 16; // 活动子任务id
-  map<string,string> Properties = 17; // 扩展属性
 }
 
 // 升级经验

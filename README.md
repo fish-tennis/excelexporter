@@ -16,6 +16,52 @@
 - 加载导出的json数据(或二进制数据),直接反序列化成proto的message对象
 - 测试用例在example/import_test.go
 
+## 命令行
+```shell
+excelexporter -config=.\exporter.yaml
+```
+config: 配置文件
+```yaml
+#Excel导入目录(excel所在目录)
+DataImportPath: "./data/excel"
+
+#数据导出目录
+DataExportPath: "./data/json"
+
+#proto所在目录
+ProtoPath: "./proto"
+
+#需要解析的proto文件
+ProtoFiles:
+  - "export.proto"
+  - "cfg.proto"
+
+#可选项:导出md5文件完整路径
+Md5ExportPath: "./data/json/md5.json"
+
+#代码模板目录
+CodeTemplatePath: "./template/"
+
+#代码导出目录
+CodeExportPath: "./cfg/"
+
+#代码模板
+CodeTemplateFiles:
+  - "data_mgr.go.template"
+
+#导出分组标记 c s cs
+ExportGroup: "s"
+
+#默认的分组标记
+DefaultGroup: "cs"
+
+#导出总表的文件名
+ExportAllExcelFile: "all.xlsx"
+
+#导出总表的sheet名
+ExportAllSheet: "ExportCfg"
+```
+
 ## 简单示例1:
 - 由于proto文件中已经定义了数据结构,所以excel里只需要列名和proto定义的字段名一致,就可以知道字段的类型信息,
 所以excel里不需要再指定字段类型,假设物品的proto定义如下

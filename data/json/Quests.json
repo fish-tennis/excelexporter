@@ -1,23 +1,10 @@
 {
   "1": {
     "CfgId": 1,
-    "ConditionTemplates": [
-      {
-        "Args": [
-          2
-        ],
-        "CfgId": 1
-      }
-    ],
     "Name": "升到5级",
     "ProgressTemplate": {
       "Arg": 5,
       "CfgId": 1
-    },
-    "Properties": {
-      "k1": "v1",
-      "k2": "v2",
-      "k3": "v3"
     },
     "QuestType": 0,
     "Rewards": [

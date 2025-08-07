@@ -31,7 +31,7 @@ func TestImport(t *testing.T) {
 
 // 加载所有配置文件(由TestExportAll导出的文件)
 func TestImportAll(t *testing.T) {
-	err := cfg.Load("./../data/json/", nil, nil)
+	err := cfg.Load("./../data/json/", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -47,7 +47,7 @@ func TestImportConcurrency(t *testing.T) {
 			if idx == 5 {
 				time.Sleep(time.Second)
 			}
-			err := cfg.Load("./../data/json/", nil, nil)
+			err := cfg.Load("./../data/json/", nil)
 			if err != nil {
 				t.Logf("%v Load err:%v", idx, err)
 			} else {
@@ -61,19 +61,15 @@ func TestImportConcurrency(t *testing.T) {
 // reload
 func TestReload(t *testing.T) {
 	loadedFiles := make(map[string]struct{})
-	preprocessFn := func(mgr any, mgrName, messageName, fileName string) error {
-		t.Logf("preprocess: %v fileName:%v", mgrName, fileName)
-		loadedFiles[fileName] = struct{}{}
-		return nil
-	}
 	filterFn := func(fileName string) bool {
 		if _, ok := loadedFiles[fileName]; ok {
 			return false
 		}
+		loadedFiles[fileName] = struct{}{}
 		return true
 	}
 	for i := 0; i < 2; i++ {
-		err := cfg.Load("./../data/json/", preprocessFn, filterFn)
+		err := cfg.Load("./../data/json/", filterFn)
 		if err != nil {
 			t.Fatal(err)
 		}
