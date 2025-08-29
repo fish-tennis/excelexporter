@@ -19,8 +19,8 @@ type ExportOption struct {
 	Md5ExportPath  string `yaml:"Md5ExportPath"`  // 可选项:导出md5文件完整路径
 
 	CodeTemplatePath  string   `yaml:"CodeTemplatePath"`  // 代码模板目录
-	CodeExportPath    string   `yaml:"CodeExportPath"`    // 代码导出目录
 	CodeTemplateFiles []string `yaml:"CodeTemplateFiles"` // 代码模板
+	CodeExportFiles   []string `yaml:"CodeExportFiles"`   // 代码模板导出文件名,和CodeTemplateFiles一一对应
 
 	ExportGroup  string `yaml:"ExportGroup"`  // 导出分组标记 c s cs
 	DefaultGroup string `yaml:"DefaultGroup"` // 默认的分组标记
@@ -64,8 +64,9 @@ func ExportAll(exportOption *ExportOption, exportExcelFileName, exportSheetName 
 		return defaultValue
 	}
 	generateInfo := &GenerateInfo{}
-	for _, templateFile := range exportOption.CodeTemplateFiles {
+	for idx, templateFile := range exportOption.CodeTemplateFiles {
 		generateInfo.TemplateFiles = append(generateInfo.TemplateFiles, exportOption.CodeTemplatePath+templateFile)
+		generateInfo.ExportFiles = append(generateInfo.ExportFiles, exportOption.CodeExportFiles[idx])
 	}
 	exportInfoMap := make(map[string]*ExportInfo)
 	orderNames := make([]string, 0)
@@ -189,7 +190,7 @@ func ExportAll(exportOption *ExportOption, exportExcelFileName, exportSheetName 
 			CodeComment: exportInfo.CodeComment,
 		})
 	}
-	err = GenerateCode(generateInfo, exportOption.CodeExportPath)
+	err = GenerateCode(generateInfo)
 	if err != nil {
 		fmt.Println(fmt.Sprintf("GenerateCodeErr err:%v", err))
 		return err
@@ -328,6 +329,10 @@ func ExportByConfig(configFile string) error {
 		fmt.Println(fmt.Sprintf("parse yaml config err:%v file:%v", err, configFile))
 		return err
 	}
+	if len(options.CodeTemplateFiles) != len(options.CodeExportFiles) {
+		fmt.Println(fmt.Sprintf("len(CodeTemplateFiles) != len(CodeExportFiles) file:%v", configFile))
+		return errors.New("len(CodeTemplateFiles) != len(CodeExportFiles)")
+	}
 	if len(options.ProtoFiles) > 0 {
 		err = ParseProtoFile([]string{options.ProtoPath}, options.ProtoFiles...)
 		if err != nil {
@@ -343,7 +348,6 @@ func checkExportOption(opt *ExportOption) {
 	autoCheckDir(&opt.DataImportPath)
 	autoCheckDir(&opt.DataExportPath)
 	autoCheckDir(&opt.CodeTemplatePath)
-	autoCheckDir(&opt.CodeExportPath)
 	autoCheckDir(&opt.ProtoPath)
 }
 

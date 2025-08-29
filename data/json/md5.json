@@ -1,5 +1,6 @@
 {
   "ItemCfg.json": "9dbc5a27f9a838e4c0bf6e602553cb96",
   "Quests.json": "551be40869e04ffd8d906bfa79db5d60",
-  "levelcfg.json": "817767ff28b97ab64c43538b5d58d808"
+  "levelcfg.json": "817767ff28b97ab64c43538b5d58d808",
+  "progress_template.json": "e898ca835fd4cca43f9800a982ecdd91"
 }

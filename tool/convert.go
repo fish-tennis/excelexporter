@@ -216,7 +216,7 @@ func ConvertSheet(exportOption *ExportOption, excelFile *excelize.File, opt *She
 					continue
 				}
 			} else {
-				err = SetFieldValue(rowValue, fieldDesc, columnOpt, cell)
+				err = SetFieldValue(rowValue, fieldDesc, columnOpt, cell, false)
 				if err != nil {
 					fmt.Println(fmt.Sprintf("SetFieldValueErr row%v sheet:%v err:%v", rowIdx, opt.SheetName, err))
 					continue
@@ -305,7 +305,7 @@ func convertToJsonMapByKeyType(m map[any]any, keyType string) any {
 	return m
 }
 
-func SetFieldValue(m map[string]any, fieldDesc *desc.FieldDescriptor, opt *ColumnOption, cellValue string) error {
+func SetFieldValue(m map[string]any, fieldDesc *desc.FieldDescriptor, opt *ColumnOption, cellValue string, isSubMsg bool) error {
 	var fieldValue any
 	// [] or map
 	if fieldDesc.IsRepeated() {
@@ -318,7 +318,11 @@ func SetFieldValue(m map[string]any, fieldDesc *desc.FieldDescriptor, opt *Colum
 			lines := strings.Split(cellValue, "\n")
 			for _, line := range lines {
 				// k1_v1;k2_v2
-				pairValues := strings.Split(line, ";")
+				sepChar := ";"
+				if isSubMsg {
+					sepChar = "," // 第一层用了;做分隔符 嵌套的子对象用,分割
+				}
+				pairValues := strings.Split(line, sepChar)
 				for _, pairValue := range pairValues {
 					kv := strings.SplitN(pairValue, "_", 2)
 					if len(kv) != 2 {
@@ -338,7 +342,11 @@ func SetFieldValue(m map[string]any, fieldDesc *desc.FieldDescriptor, opt *Colum
 			// repeated字段,同时支持换行和;
 			lines := strings.Split(cellValue, "\n")
 			for _, line := range lines {
-				elemValues := strings.Split(line, ";")
+				sepChar := ";"
+				if isSubMsg {
+					sepChar = "," // 第一层用了;做分隔符 嵌套的子对象用,分割
+				}
+				elemValues := strings.Split(line, sepChar)
 				for _, elemValue := range elemValues {
 					elem := ConvertFieldValue(fieldDesc, opt, elemValue)
 					if elem != nil {
@@ -445,6 +453,7 @@ func ConvertFieldValue(fieldDesc *desc.FieldDescriptor, columnOption *ColumnOpti
 		// 嵌套结构,递归解析
 		subMsgValue := make(map[string]any)
 		subMsgDesc := fieldDesc.GetMessageType()
+		//subMsgName := subMsgDesc.GetName()
 		// 简洁模式,不需要字段名,不支持多层结构 如1_2_5
 		if columnOption.IsNoFieldName() {
 			fieldValues := strings.Split(cellValue, "_")
@@ -453,7 +462,7 @@ func ConvertFieldValue(fieldDesc *desc.FieldDescriptor, columnOption *ColumnOpti
 					break
 				}
 				subFieldDesc := subMsgDesc.GetFields()[fieldIndex]
-				SetFieldValue(subMsgValue, subFieldDesc, columnOption, fieldStr)
+				SetFieldValue(subMsgValue, subFieldDesc, columnOption, fieldStr, true)
 			}
 		} else if columnOption.IsFullFieldName() {
 			// 默认使用字段名模式,该模块填写略复杂,但是兼容性好一些 如CfgId_2#Args_1
@@ -464,22 +473,22 @@ func ConvertFieldValue(fieldDesc *desc.FieldDescriptor, columnOption *ColumnOpti
 					fmt.Println(fmt.Sprintf("field %s not found", kv.Key))
 					continue
 				}
-				SetFieldValue(subMsgValue, subFieldDesc, columnOption, kv.Value)
+				SetFieldValue(subMsgValue, subFieldDesc, columnOption, kv.Value, true)
 			}
 		} else {
 			// #Field=Field1_Field2_Field3
 			fieldValues := strings.Split(cellValue, "_")
 			for fieldIndex, fieldStr := range fieldValues {
-				if fieldIndex >= len(columnOption.FieldNames) {
+				if fieldIndex >= len(subMsgDesc.GetFields()) {
 					break
 				}
-				subFieldName := columnOption.FieldNames[fieldIndex]
-				subFieldDesc := FindFieldDescriptor(subMsgDesc, subFieldName)
+				//subFieldName := columnOption.FieldNames[fieldIndex]
+				subFieldDesc := subMsgDesc.GetFields()[fieldIndex]
 				if subFieldDesc == nil {
-					fmt.Println(fmt.Sprintf("field %s not found", subFieldName))
+					fmt.Println(fmt.Sprintf("fieldIdx %v not found", fieldIndex))
 					continue
 				}
-				SetFieldValue(subMsgValue, subFieldDesc, columnOption, fieldStr)
+				SetFieldValue(subMsgValue, subFieldDesc, columnOption, fieldStr, true)
 			}
 		}
 		if len(subMsgValue) == 0 {

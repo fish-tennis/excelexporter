@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"os"
 	"path"
-	"strings"
 	"text/template"
 )
 
@@ -19,6 +18,7 @@ type DataMgrInfo struct {
 type GenerateInfo struct {
 	//PackageName   string
 	TemplateFiles []string
+	ExportFiles   []string
 	Mgrs          []*DataMgrInfo
 }
 
@@ -27,13 +27,13 @@ func (g *GenerateInfo) AddDataMgrInfo(info *DataMgrInfo) {
 }
 
 // 根据模板文件,生成代码
-func GenerateCode(generateInfo *GenerateInfo, codeExportPath string) error {
-	for _, templateFile := range generateInfo.TemplateFiles {
+func GenerateCode(generateInfo *GenerateInfo) error {
+	for idx, templateFile := range generateInfo.TemplateFiles {
 		tmpl, err := template.ParseFiles(templateFile)
 		if err != nil {
 			return err
 		}
-		codeFileName := codeExportPath + strings.TrimSuffix(path.Base(templateFile), ".template")
+		codeFileName := generateInfo.ExportFiles[idx]
 		err = os.Mkdir(path.Dir(codeFileName), os.ModePerm)
 		if err != nil && !os.IsExist(err) {
 			fmt.Println(fmt.Sprintf("create %v err:%v", path.Dir(codeFileName), err))
@@ -50,6 +50,7 @@ func GenerateCode(generateInfo *GenerateInfo, codeExportPath string) error {
 			fmt.Println(fmt.Sprintf("tmpl.Execute %v err:%v", codeFileName, err))
 			return err
 		}
+		fmt.Println(fmt.Sprintf("GenerateCode export:%v template:%v", codeFileName, templateFile))
 	}
 	return nil
 }

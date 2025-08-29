@@ -84,3 +84,21 @@ message LevelExp {
 	int32 Level = 1; // 等级
 	int32 NeedExp = 2; // 升到该等级需要的经验值
 }
+
+// 数值比较配置
+message ValueCompareCfg {
+  string Op = 1;   // 操作符 = > >= < <= != [] ![]
+  repeated int32 Values = 2; // 比较的值(可配多个)
+}
+
+// 进度模板配置
+message ProgressTemplateCfg {
+  int32 CfgId = 1; // 配置id
+  int32 Type = 2; // 进度类型(enum ProgressType)
+  bool NeedInit = 3; // 接任务时,是否初始化一下当前进度
+  string Event = 4; // 关联的事件名
+  string ProgressField = 5; // 以事件字段值作为进度值,为空表示进度值是1
+  map<string,ValueCompareCfg> IntEventFields = 6; // 数值类型的事件字段值(支持复杂的比较操作符)
+  map<string,string> StringEventFields = 7; // 事件字段值(字符串形式)
+  map<string,string> Properties = 8; // 扩展属性
+}
