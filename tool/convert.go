@@ -42,6 +42,9 @@ type ColumnOption struct {
 
 // 简洁模式,不需要字段名(#Field=no)
 func (c *ColumnOption) IsNoFieldName() bool {
+	if len(c.FieldNames) == 0 {
+		return true
+	}
 	return len(c.FieldNames) == 1 && c.FieldNames[0] == "no"
 }
 
@@ -479,13 +482,13 @@ func ConvertFieldValue(fieldDesc *desc.FieldDescriptor, columnOption *ColumnOpti
 			// #Field=Field1_Field2_Field3
 			fieldValues := strings.Split(cellValue, "_")
 			for fieldIndex, fieldStr := range fieldValues {
-				if fieldIndex >= len(subMsgDesc.GetFields()) {
+				if fieldIndex >= len(columnOption.FieldNames) {
 					break
 				}
-				//subFieldName := columnOption.FieldNames[fieldIndex]
-				subFieldDesc := subMsgDesc.GetFields()[fieldIndex]
+				subFieldName := columnOption.FieldNames[fieldIndex]
+				subFieldDesc := subMsgDesc.FindFieldByName(subFieldName)
 				if subFieldDesc == nil {
-					fmt.Println(fmt.Sprintf("fieldIdx %v not found", fieldIndex))
+					fmt.Println(fmt.Sprintf("field %v %v not found", fieldIndex, subFieldName))
 					continue
 				}
 				SetFieldValue(subMsgValue, subFieldDesc, columnOption, fieldStr, true)

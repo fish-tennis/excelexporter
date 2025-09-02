@@ -23,6 +23,9 @@ var (
     //
     
     LevelExps *DataSlice[*pb.LevelExp]
+    //兑换数据
+    ExchangeCfgs *DataMap[*pb.ExchangeCfg]
+    
     //
     ProgressTemplateCfgs *DataMap[*pb.ProgressTemplateCfg]
     
@@ -37,6 +40,8 @@ type processRegister struct {
     
     
     LevelExpsProcess func(mgr *DataSlice[*pb.LevelExp]) error
+    ExchangeCfgsProcess func(mgr *DataMap[*pb.ExchangeCfg]) error
+    
     ProgressTemplateCfgsProcess func(mgr *DataMap[*pb.ProgressTemplateCfg]) error
     
     
@@ -84,6 +89,16 @@ func Load(dataDir string, filter func(fileName string) bool) error {
         // 最后再赋值给全局变量(引用赋值是原子操作)
         LevelExps = tmpLevelExps
     }
+    if filter == nil || filter("exchange.json") {
+        // 考虑到并发安全,这里先加载到临时变量
+        tmpExchangeCfgs := NewDataMap[*pb.ExchangeCfg]()
+        err = tmpExchangeCfgs.LoadJson(dataDir+"exchange.json")
+        if err != nil {
+            return err
+        }
+        // 最后再赋值给全局变量(引用赋值是原子操作)
+        ExchangeCfgs = tmpExchangeCfgs
+    }
     if filter == nil || filter("progress_template.json") {
         // 考虑到并发安全,这里先加载到临时变量
         tmpProgressTemplateCfgs := NewDataMap[*pb.ProgressTemplateCfg]()
@@ -112,6 +127,13 @@ func Load(dataDir string, filter func(fileName string) bool) error {
     if register.LevelExpsProcess != nil {
         // 预处理数据
         err = register.LevelExpsProcess(LevelExps)
+        if err != nil {
+            return err
+        }
+    }
+    if register.ExchangeCfgsProcess != nil {
+        // 预处理数据
+        err = register.ExchangeCfgsProcess(ExchangeCfgs)
         if err != nil {
             return err
         }

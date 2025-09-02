@@ -1,0 +1,52 @@
+{
+  "10001": {
+    "CfgId": 10001,
+    "CountLimit": 1,
+    "Rewards": [
+      {
+        "CfgId": 1,
+        "Num": 2
+      }
+    ]
+  },
+  "50001": {
+    "CfgId": 50001,
+    "Consumes": [
+      {
+        "CfgId": 1,
+        "Num": 1
+      },
+      {
+        "CfgId": 2,
+        "Num": 2
+      }
+    ],
+    "CountLimit": 1,
+    "Rewards": [
+      {
+        "CfgId": 3,
+        "Num": 1
+      }
+    ]
+  },
+  "50002": {
+    "CfgId": 50002,
+    "Consumes": [
+      {
+        "CfgId": 3,
+        "Num": 1
+      },
+      {
+        "CfgId": 4,
+        "Num": 2
+      }
+    ],
+    "CountLimit": 2,
+    "Rewards": [
+      {
+        "CfgId": 1,
+        "Num": 10
+      }
+    ]
+  }
+}
