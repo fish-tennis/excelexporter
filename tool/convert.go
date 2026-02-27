@@ -476,6 +476,33 @@ func SetFieldValueJson(m map[string]any, fieldDesc *desc.FieldDescriptor, opt *C
 	return nil
 }
 
+// 判断一个字符串是否是数字
+func IsDigit(cellValue string) bool {
+	if cellValue == "" {
+		return false
+	}
+	hasDecimal := false
+	for i, c := range cellValue {
+		// 允许负数的负号
+		if i == 0 && c == '-' {
+			continue
+		}
+		// 允许一个小数点
+		if c == '.' {
+			if hasDecimal {
+				return false // 已经有小数点了
+			}
+			hasDecimal = true
+			continue
+		}
+		// 检查是否是数字
+		if c < '0' || c > '9' {
+			return false
+		}
+	}
+	return true
+}
+
 func ConvertFieldValue(fieldDesc *desc.FieldDescriptor, columnOption *ColumnOption, cellValue string) any {
 	if len(cellValue) == 0 {
 		return nil
@@ -526,7 +553,22 @@ func ConvertFieldValue(fieldDesc *desc.FieldDescriptor, columnOption *ColumnOpti
 		fieldValue = strings.ToLower(cellValue) == "true" || cellValue == "1"
 
 	case descriptorpb.FieldDescriptorProto_TYPE_ENUM:
-		fieldValue = Atoi(cellValue) // NOTE: 枚举暂时当作整数处理
+		if IsDigit(cellValue) {
+			fieldValue = Atoi(cellValue)
+		} else {
+			// 枚举转数字
+			enumDesc := fieldDesc.GetEnumType()
+			if enumDesc == nil {
+				fmt.Println(fmt.Sprintf("GetEnumType error %v %v", fieldDesc.GetName(), cellValue))
+				break
+			}
+			enumValueDesc := enumDesc.FindValueByName(cellValue)
+			if enumValueDesc == nil {
+				fmt.Println(fmt.Sprintf("convert enum error %v %v", fieldDesc.GetName(), cellValue))
+				break
+			}
+			fieldValue = enumValueDesc.GetNumber()
+		}
 
 	case descriptorpb.FieldDescriptorProto_TYPE_MESSAGE:
 		// 嵌套结构,递归解析
