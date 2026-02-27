@@ -73,7 +73,7 @@ func ExportAll(exportOption *ExportOption, exportExcelFileName, exportSheetName 
 	for _, v := range sheets {
 		exportCfg := v.(map[string]any)
 		sheetName := getMapValueFn(exportCfg, "Sheet", "")
-		sheetExportGroup := getMapValueFn(exportCfg, "ExportGroup", exportOption.DefaultGroup)
+		sheetExportGroup := getMapValueFn(exportCfg, "Group", exportOption.DefaultGroup)
 		if sheetExportGroup == "" {
 			sheetExportGroup = exportOption.DefaultGroup
 		}
