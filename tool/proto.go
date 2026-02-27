@@ -5,6 +5,7 @@ import (
 	"github.com/jhump/protoreflect/desc"
 	"github.com/jhump/protoreflect/desc/protoparse"
 	"google.golang.org/protobuf/types/descriptorpb"
+	"strings"
 )
 
 var (
@@ -46,6 +47,36 @@ func FindMessageDescriptor(messageName string) *desc.MessageDescriptor {
 
 // 获取message的字段的结构描述
 func FindFieldDescriptor(msgDesc *desc.MessageDescriptor, fieldName string) *desc.FieldDescriptor {
+	// 支持字段展开
+	if strings.Index(fieldName, ".") > 0 {
+		names := strings.Split(fieldName, ".") // child.fieldName
+		if len(names) != 2 {
+			fmt.Println(fmt.Sprintf("fieldName error1: %v %v", msgDesc.GetName(), fieldName))
+			return nil
+		}
+		childName := names[0]
+		childFieldName := names[1]
+		childDesc := msgDesc.FindFieldByName(childName)
+		if childDesc == nil {
+			fmt.Println(fmt.Sprintf("fieldName error2: %v %v", msgDesc.GetName(), fieldName))
+			return nil
+		}
+		// child必须是个message
+		if childDesc.GetType() != descriptorpb.FieldDescriptorProto_TYPE_MESSAGE {
+			fmt.Println(fmt.Sprintf("fieldName error3: %v %v", msgDesc.GetName(), fieldName))
+			return nil
+		}
+		childMessageDesc := childDesc.GetMessageType()
+		if childMessageDesc == nil {
+			fmt.Println(fmt.Sprintf("fieldName error4: %v %v", msgDesc.GetName(), fieldName))
+			return nil
+		}
+		fieldDesc := childMessageDesc.FindFieldByName(childFieldName)
+		if fieldDesc == nil {
+			fieldDesc = childMessageDesc.FindFieldByJSONName(childFieldName)
+		}
+		return fieldDesc
+	}
 	fieldDesc := msgDesc.FindFieldByName(fieldName)
 	if fieldDesc == nil {
 		fieldDesc = msgDesc.FindFieldByJSONName(fieldName)

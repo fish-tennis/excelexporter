@@ -25,9 +25,11 @@ type ColumnOption struct {
 	Name        string
 	ColumnIndex int
 	ExportGroup string // 导出分组标记 c s cs
+
 	// 特殊的格式 如format=json
-	// 些复杂结构的数据在excel里编辑是很麻烦的,这时候可以考虑直接使用json格式
+	// 有些复杂结构的数据在excel里编辑是很麻烦的,这时候可以考虑直接使用json格式
 	Format string
+
 	// 字段是message,对应的字段名,如#Field=Field1_Field2_Field3
 	// no和full是特定格式
 	//	---------------------------------------------
@@ -37,7 +39,27 @@ type ColumnOption struct {
 	//	| 1_3       | 1_3             | Id_1#Count_3 |
 	//	---------------------------------------------
 	FieldNames []string
-	Ref        string // 关联的其他配置表的sheet名
+
+	Ref string // 关联的其他配置表的sheet名
+
+	// 支持子字段展开
+	// 假设proto定义如下:
+	// type BaseMessage {
+	//   int32 Id = 1;
+	//   string Name = 2;
+	// }
+	// type ComboMessage {
+	//   ChildMessage Child = 1;
+	//   string Intro = 3;
+	// }
+	// 结构为ComboMessage的excel表如下
+	//	----------------------------------------
+	//	| Child.Id | Child.Name  | Intro       |
+	//	----------------------------------------
+	//	| 1        | abc         | it's a test |
+	//	----------------------------------------
+	ExpandName      string // 展开的字段,如注释中的Child
+	ExpandFieldName string // 展开的字段的字段名,如注释中的Id和Name
 }
 
 // 简洁模式,不需要字段名(#Field=no)
@@ -51,6 +73,11 @@ func (c *ColumnOption) IsNoFieldName() bool {
 // #Field=full 每一行都需要填上字段名
 func (c *ColumnOption) IsFullFieldName() bool {
 	return len(c.FieldNames) == 1 && c.FieldNames[0] == "full"
+}
+
+// 是否是展开字段
+func (c *ColumnOption) IsExpand() bool {
+	return c.ExpandName != ""
 }
 
 // ColumnName#format=json#arg=value
@@ -70,6 +97,13 @@ func ConvertColumnOption(cell string) *ColumnOption {
 	}
 	opt := &ColumnOption{
 		Name: nameAndArgs[0],
+	}
+	if strings.Index(opt.Name, ".") > 0 {
+		expandNames := strings.Split(opt.Name, ".")
+		if len(expandNames) == 2 {
+			opt.ExpandName = expandNames[0]
+			opt.ExpandFieldName = expandNames[1]
+		}
 	}
 	for i := 1; i < len(nameAndArgs); i++ {
 		arg := nameAndArgs[i]
@@ -107,6 +141,10 @@ func ConvertSheet(exportOption *ExportOption, excelFile *excelize.File, opt *She
 		mapKeyFieldDesc = FindFieldDescriptor(msgDesc, opt.MapKeyName)
 		if mapKeyFieldDesc != nil {
 			opt.MapKeyName = mapKeyFieldDesc.GetJSONName() // 因为要导出为json格式,所以用json名
+			if strings.Index(opt.MapKeyName, ".") > 0 {
+				names := strings.Split(opt.MapKeyName, ".") // child.fieldName
+				opt.MapKeyName = names[0] + "." + mapKeyFieldDesc.GetJSONName()
+			}
 		}
 		if opt.MapKeyType == "" && mapKeyFieldDesc != nil {
 			opt.MapKeyType = GetKeyTypeString(mapKeyFieldDesc)
@@ -164,6 +202,9 @@ func ConvertSheet(exportOption *ExportOption, excelFile *excelize.File, opt *She
 					mapKeyFieldDesc = FindFieldDescriptor(msgDesc, opt.MapKeyName)
 					if mapKeyFieldDesc != nil {
 						opt.MapKeyName = mapKeyFieldDesc.GetJSONName() // 因为要导出为json格式,所以用json名
+						if columnOpt.IsExpand() {
+							opt.MapKeyName = columnOpt.ExpandName + "." + mapKeyFieldDesc.GetJSONName()
+						}
 					}
 					if opt.MapKeyType == "" && mapKeyFieldDesc != nil {
 						opt.MapKeyType = GetKeyTypeString(mapKeyFieldDesc)
@@ -230,10 +271,13 @@ func ConvertSheet(exportOption *ExportOption, excelFile *excelize.File, opt *She
 			keyValue := rowValue[opt.MapKeyName]
 			if keyValue == nil {
 				fmt.Println(fmt.Sprintf("row%v sheet:%v key %s not found", rowIdx, opt.SheetName, opt.MapKeyName))
+				fmt.Println(fmt.Sprintf("row: %v", rowValue))
 				continue
 			}
+			mergeExpandedSubField(opt, rowValue)
 			m[keyValue] = rowValue
 		} else if opt.MgrType == "slice" {
+			mergeExpandedSubField(opt, rowValue)
 			s = append(s, rowValue)
 		}
 	}
@@ -244,6 +288,34 @@ func ConvertSheet(exportOption *ExportOption, excelFile *excelize.File, opt *She
 		return s, nil
 	}
 	return nil, errors.New(fmt.Sprintf("unsupported MgrType %v sheet:%v", opt.MgrType, opt.SheetName))
+}
+
+// 把展开的子字段合并
+func mergeExpandedSubField(opt *SheetOption, rowValue map[string]any) map[string]any {
+	hasExpandSubField := false
+	for _, columnOpt := range opt.ColumnOpts {
+		if columnOpt.IsExpand() {
+			hasExpandSubField = true
+			break
+		}
+	}
+	if !hasExpandSubField {
+		return rowValue
+	}
+	// 合并展开的子字段
+	for _, columnOpt := range opt.ColumnOpts {
+		if columnOpt.IsExpand() {
+			rowValue[columnOpt.ExpandName] = make(map[string]any) // 子对象
+		}
+	}
+	for _, columnOpt := range opt.ColumnOpts {
+		if columnOpt.IsExpand() {
+			childValue := rowValue[columnOpt.ExpandName].(map[string]any)
+			childValue[columnOpt.ExpandFieldName] = rowValue[columnOpt.Name] // 子对象字段赋值
+			delete(rowValue, columnOpt.Name)                                 // 子对象字段赋值完,删除
+		}
+	}
+	return rowValue
 }
 
 func isColumnNameDefineRow(column0 string) bool {
@@ -368,7 +440,11 @@ func SetFieldValue(m map[string]any, fieldDesc *desc.FieldDescriptor, opt *Colum
 	if fieldValue == nil {
 		return nil
 	}
-	m[fieldDesc.GetJSONName()] = fieldValue
+	if opt.IsExpand() {
+		m[opt.Name] = fieldValue // 子字段展开
+	} else {
+		m[fieldDesc.GetJSONName()] = fieldValue
+	}
 	//fmt.Println(fmt.Sprintf("SetFieldValue %v:%v", fieldDesc.GetJSONName(), fieldValue))
 	return nil
 }
