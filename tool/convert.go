@@ -235,19 +235,39 @@ func ConvertSheet(exportOption *ExportOption, excelFile *excelize.File, opt *She
 		}
 		// 解析数据行
 		rowValue := make(map[string]any)
-		for _, columnOpt := range opt.ColumnOpts {
-			if exportOption.ExportGroup != "" && !strings.Contains(columnOpt.ExportGroup, exportOption.ExportGroup) {
+		// Key-Value格式的配置格式 特殊处理
+		if opt.MgrType == "object" {
+			var (
+				keyColumnOpt   *ColumnOption
+				valueColumnOpt *ColumnOption
+			)
+			for _, columnOpt := range opt.ColumnOpts {
+				if strings.ToLower(columnOpt.Name) == "key" {
+					keyColumnOpt = columnOpt
+				}
+				if strings.ToLower(columnOpt.Name) == "value" {
+					valueColumnOpt = columnOpt
+				}
+			}
+			if keyColumnOpt == nil {
+				fmt.Println(fmt.Sprintf("key column not found: %v", opt.SheetName))
 				continue
 			}
-			fieldDesc := FindFieldDescriptor(msgDesc, columnOpt.Name)
-			if fieldDesc == nil {
-				fmt.Println(fmt.Sprintf("FieldNameNotFound row%v name:%s sheet:%v", rowIdx, columnOpt.Name, opt.SheetName))
+			if valueColumnOpt == nil {
+				fmt.Println(fmt.Sprintf("value column not found: %v", opt.SheetName))
 				continue
 			}
-			if columnOpt.ColumnIndex >= len(row) {
+			if keyColumnOpt.ColumnIndex >= len(row) || valueColumnOpt.ColumnIndex >= len(row) {
 				continue // 跳过空的cell
 			}
-			cell := strings.TrimSpace(row[columnOpt.ColumnIndex]) // 移除首尾的空字符串
+			fieldName := strings.TrimSpace(row[keyColumnOpt.ColumnIndex])
+			cell := strings.TrimSpace(row[valueColumnOpt.ColumnIndex]) // 移除首尾的空字符串
+			fieldDesc := FindFieldDescriptor(msgDesc, fieldName)
+			if fieldDesc == nil {
+				fmt.Println(fmt.Sprintf("FieldNameNotFound row%v name:%s sheet:%v", rowIdx, fieldName, opt.SheetName))
+				continue
+			}
+			columnOpt := valueColumnOpt
 			// format扩展 json
 			if columnOpt.Format == "json" {
 				// 允许不填最外层的{}
@@ -264,6 +284,41 @@ func ConvertSheet(exportOption *ExportOption, excelFile *excelize.File, opt *She
 				if err != nil {
 					fmt.Println(fmt.Sprintf("SetFieldValueErr row%v sheet:%v err:%v", rowIdx, opt.SheetName, err))
 					continue
+				}
+			}
+			m[fieldName] = rowValue[fieldDesc.GetJSONName()]
+		} else {
+			// map和slice格式的配置数据
+			for _, columnOpt := range opt.ColumnOpts {
+				if exportOption.ExportGroup != "" && !strings.Contains(columnOpt.ExportGroup, exportOption.ExportGroup) {
+					continue
+				}
+				if columnOpt.ColumnIndex >= len(row) {
+					continue // 跳过空的cell
+				}
+				fieldDesc := FindFieldDescriptor(msgDesc, columnOpt.Name)
+				if fieldDesc == nil {
+					fmt.Println(fmt.Sprintf("FieldNameNotFound row%v name:%s sheet:%v", rowIdx, columnOpt.Name, opt.SheetName))
+					continue
+				}
+				cell := strings.TrimSpace(row[columnOpt.ColumnIndex]) // 移除首尾的空字符串
+				// format扩展 json
+				if columnOpt.Format == "json" {
+					// 允许不填最外层的{}
+					if len(cell) > 0 && cell[0] != '{' && cell[len(cell)-1] != '}' {
+						cell = "{" + cell + "}"
+					}
+					err = SetFieldValueJson(rowValue, fieldDesc, columnOpt, cell)
+					if err != nil {
+						fmt.Println(fmt.Sprintf("SetFieldValueJsonErr row%v sheet:%v err:%v", rowIdx, opt.SheetName, err))
+						continue
+					}
+				} else {
+					err = SetFieldValue(rowValue, fieldDesc, columnOpt, cell, false)
+					if err != nil {
+						fmt.Println(fmt.Sprintf("SetFieldValueErr row%v sheet:%v err:%v", rowIdx, opt.SheetName, err))
+						continue
+					}
 				}
 			}
 		}
@@ -286,6 +341,8 @@ func ConvertSheet(exportOption *ExportOption, excelFile *excelize.File, opt *She
 		return convertToJsonMapByKeyType(m, opt.MapKeyType), nil
 	} else if opt.MgrType == "slice" {
 		return s, nil
+	} else if opt.MgrType == "object" {
+		return convertToJsonMapByKeyType(m, "string"), nil
 	}
 	return nil, errors.New(fmt.Sprintf("unsupported MgrType %v sheet:%v", opt.MgrType, opt.SheetName))
 }
@@ -311,15 +368,17 @@ func mergeExpandedSubField(opt *SheetOption, rowValue map[string]any) map[string
 	for _, columnOpt := range opt.ColumnOpts {
 		if columnOpt.IsExpand() {
 			childValue := rowValue[columnOpt.ExpandName].(map[string]any)
-			childValue[columnOpt.ExpandFieldName] = rowValue[columnOpt.Name] // 子对象字段赋值
-			delete(rowValue, columnOpt.Name)                                 // 子对象字段赋值完,删除
+			if fieldValue, ok := rowValue[columnOpt.Name]; ok {
+				childValue[columnOpt.ExpandFieldName] = fieldValue // 子对象字段赋值
+				delete(rowValue, columnOpt.Name)                   // 子对象字段赋值完,删除
+			}
 		}
 	}
 	return rowValue
 }
 
 func isColumnNameDefineRow(column0 string) bool {
-	if strings.HasPrefix(column0, "##var") {
+	if strings.HasPrefix(strings.ToLower(column0), "##var") {
 		return true
 	}
 	if strings.HasPrefix(column0, "#") {
@@ -329,7 +388,7 @@ func isColumnNameDefineRow(column0 string) bool {
 }
 
 func isExportGroupRow(column0 string) bool {
-	if strings.HasPrefix(column0, "##group") {
+	if strings.HasPrefix(strings.ToLower(column0), "##group") {
 		return true
 	}
 	if strings.HasPrefix(column0, "#") {
