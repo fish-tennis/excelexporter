@@ -286,7 +286,11 @@ func ConvertSheet(exportOption *ExportOption, excelFile *excelize.File, opt *She
 					continue
 				}
 			}
-			m[fieldName] = rowValue[fieldDesc.GetJSONName()]
+			if v, ok := rowValue[fieldDesc.GetJSONName()]; ok {
+				m[fieldName] = v
+			} else {
+				fmt.Println(fmt.Sprintf("value convert err row%v sheet:%v key:%v value:%v", rowIdx, opt.SheetName, fieldName, cell))
+			}
 		} else {
 			// map和slice格式的配置数据
 			for _, columnOpt := range opt.ColumnOpts {
