@@ -173,7 +173,7 @@ func ConvertSheet(exportOption *ExportOption, excelFile *excelize.File, opt *She
 			return nil, err
 		}
 		if len(row) == 0 {
-			fmt.Println(fmt.Sprintf("empty row, sheet:%v", opt.SheetName))
+			//fmt.Println(fmt.Sprintf("empty row, sheet:%v", opt.SheetName))
 			continue
 		}
 		column0 := strings.TrimSpace(row[0])
