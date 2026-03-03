@@ -11,6 +11,7 @@ type DataMgrInfo struct {
 	MessageName string // proto message name
 	MgrName     string
 	MgrType     string // map slice object
+	MapKeyType  string // int int32 int64 uint uint32 uint64 string(MgrType=map时才有效)
 	FileName    string // 导出文件名,不含目录
 	CodeComment string // 代码注释
 }

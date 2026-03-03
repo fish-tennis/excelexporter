@@ -182,13 +182,21 @@ func ExportAll(exportOption *ExportOption, exportExcelFileName, exportSheetName 
 		if exportInfo.MergeName != "" {
 			mgrName = exportInfo.MergeName
 		}
-		generateInfo.AddDataMgrInfo(&DataMgrInfo{
+		mgrInfo := &DataMgrInfo{
 			MessageName: exportInfo.SheetOption.MessageName,
 			MgrName:     mgrName,
 			MgrType:     exportInfo.SheetOption.MgrType,
+			MapKeyType:  exportInfo.SheetOption.MapKeyName,
 			FileName:    exportFileName,
 			CodeComment: exportInfo.CodeComment,
-		})
+		}
+		if mgrInfo.MgrType == "map" {
+			mgrInfo.MapKeyType = exportInfo.SheetOption.MapKeyType
+			if mgrInfo.MapKeyType == "int32" || mgrInfo.MapKeyType == "int64" || mgrInfo.MapKeyType == "uint64" {
+				mgrInfo.MapKeyType = "int"
+			}
+		}
+		generateInfo.AddDataMgrInfo(mgrInfo)
 	}
 	err = GenerateCode(generateInfo)
 	if err != nil {
