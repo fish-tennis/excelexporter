@@ -37,6 +37,7 @@ type ExportInfo struct {
 	SheetOption *SheetOption
 	MergeName   string
 	CodeComment string
+	//ExportFileName string // 导出的文件名
 }
 
 // 从一个总表导出所有的配置表
@@ -70,8 +71,10 @@ func ExportAll(exportOption *ExportOption, exportExcelFileName, exportSheetName 
 	}
 	exportInfoMap := make(map[string]*ExportInfo)
 	orderNames := make([]string, 0)
+	refCheckMap := make(map[string]*ExportInfo)
 	for _, v := range sheets {
 		exportCfg := v.(map[string]any)
+		excelName := getMapValueFn(exportCfg, "Excel", "")
 		sheetName := getMapValueFn(exportCfg, "Sheet", "")
 		sheetExportGroup := getMapValueFn(exportCfg, "Group", exportOption.DefaultGroup)
 		if sheetExportGroup == "" {
@@ -81,6 +84,7 @@ func ExportAll(exportOption *ExportOption, exportExcelFileName, exportSheetName 
 			continue
 		}
 		sheetOption := &SheetOption{
+			ExcelName:   excelName,
 			SheetName:   sheetName,
 			MessageName: getMapValueFn(exportCfg, "Message", sheetName),
 			MgrType:     getMapValueFn(exportCfg, "MgrType", "map"),
@@ -91,6 +95,7 @@ func ExportAll(exportOption *ExportOption, exportExcelFileName, exportSheetName 
 		codeComment := getMapValueFn(exportCfg, "CodeComment", "")
 		mergeName := getMapValueFn(exportCfg, "Merge", "")
 		excelFileName := getMapValueFn(exportCfg, "Excel", "")
+		//exportFileName := getMapValueFn(exportCfg, "ExportName", sheetName)
 		f, err = excelize.OpenFile(exportOption.DataImportPath + excelFileName)
 		if err != nil {
 			fmt.Println(fmt.Sprintf("open excel err:%v file:%v", err, exportOption.DataImportPath+excelFileName))
@@ -104,12 +109,14 @@ func ExportAll(exportOption *ExportOption, exportExcelFileName, exportSheetName 
 		}
 		fmt.Println(fmt.Sprintf("parse excel:%v sheet:%v", excelFileName, sheetOption.SheetName))
 		if mergeName == "" {
-			exportInfoMap[sheetName] = &ExportInfo{
+			exportInfoMap[excelName+"."+sheetName] = &ExportInfo{
 				MgrData:     sheetData,
 				SheetOption: sheetOption,
 				CodeComment: codeComment,
+				//ExportFileName: exportFileName,
 			}
-			orderNames = append(orderNames, sheetName)
+			orderNames = append(orderNames, excelName+"."+sheetName)
+			refCheckMap[sheetName] = exportInfoMap[excelName+"."+sheetName]
 		} else {
 			if mergeInfo, ok := exportInfoMap[mergeName]; ok {
 				mergeData, err := mergeMgrData(mergeInfo.MgrData, sheetData)
@@ -128,6 +135,7 @@ func ExportAll(exportOption *ExportOption, exportExcelFileName, exportSheetName 
 					CodeComment: codeComment,
 				}
 				orderNames = append(orderNames, mergeName)
+				refCheckMap[mergeName] = exportInfoMap[mergeName]
 			}
 		}
 	}
@@ -211,7 +219,7 @@ func ExportAll(exportOption *ExportOption, exportExcelFileName, exportSheetName 
 			}
 			sheetName := exportInfo.SheetOption.SheetName
 			sheetData := exportInfo.MgrData
-			refInfo, ok := exportInfoMap[columnOption.Ref]
+			refInfo, ok := refCheckMap[columnOption.Ref]
 			if !ok {
 				fmt.Println(fmt.Sprintf("ref not exists sheetName:%v column:%v ref:%v", sheetName, columnOption.Name, columnOption.Ref))
 				continue

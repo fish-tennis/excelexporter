@@ -12,6 +12,7 @@ import (
 )
 
 type SheetOption struct {
+	ExcelName      string
 	SheetName      string
 	MessageName    string
 	MgrType        string // map slice object
@@ -161,6 +162,7 @@ func ConvertSheet(exportOption *ExportOption, excelFile *excelize.File, opt *She
 		}
 	}()
 	hasParseExportGroupRow := false
+	fieldNameNotFoundMap := make(map[string]struct{})
 	opt.ColumnOpts = make([]*ColumnOption, 0)
 	m := make(map[any]any)
 	s := make([]any, 0)
@@ -264,7 +266,8 @@ func ConvertSheet(exportOption *ExportOption, excelFile *excelize.File, opt *She
 			cell := strings.TrimSpace(row[valueColumnOpt.ColumnIndex]) // 移除首尾的空字符串
 			fieldDesc := FindFieldDescriptor(msgDesc, fieldName)
 			if fieldDesc == nil {
-				fmt.Println(fmt.Sprintf("FieldNameNotFound row%v name:%s sheet:%v", rowIdx, fieldName, opt.SheetName))
+				fieldNameNotFoundMap[fieldName] = struct{}{}
+				//fmt.Println(fmt.Sprintf("FieldNameNotFound %v row%v name:%s sheet:%v", opt.ExcelName, rowIdx, fieldName, opt.SheetName))
 				continue
 			}
 			columnOpt := valueColumnOpt
@@ -302,7 +305,8 @@ func ConvertSheet(exportOption *ExportOption, excelFile *excelize.File, opt *She
 				}
 				fieldDesc := FindFieldDescriptor(msgDesc, columnOpt.Name)
 				if fieldDesc == nil {
-					fmt.Println(fmt.Sprintf("FieldNameNotFound row%v name:%s sheet:%v", rowIdx, columnOpt.Name, opt.SheetName))
+					fieldNameNotFoundMap[columnOpt.Name] = struct{}{}
+					//fmt.Println(fmt.Sprintf("FieldNameNotFound %v row%v name:%s sheet:%v", opt.ExcelName, rowIdx, columnOpt.Name, opt.SheetName))
 					continue
 				}
 				cell := strings.TrimSpace(row[columnOpt.ColumnIndex]) // 移除首尾的空字符串
@@ -329,7 +333,7 @@ func ConvertSheet(exportOption *ExportOption, excelFile *excelize.File, opt *She
 		if opt.MgrType == "map" {
 			keyValue := rowValue[opt.MapKeyName]
 			if keyValue == nil {
-				fmt.Println(fmt.Sprintf("row%v sheet:%v key %s not found", rowIdx, opt.SheetName, opt.MapKeyName))
+				fmt.Println(fmt.Sprintf("%v row%v sheet:%v key %s not found", opt.ExcelName, rowIdx, opt.SheetName, opt.MapKeyName))
 				fmt.Println(fmt.Sprintf("row: %v", rowValue))
 				continue
 			}
@@ -339,6 +343,13 @@ func ConvertSheet(exportOption *ExportOption, excelFile *excelize.File, opt *She
 			mergeExpandedSubField(opt, rowValue)
 			s = append(s, rowValue)
 		}
+	}
+	if len(fieldNameNotFoundMap) > 0 {
+		var fieldNames []string
+		for k, _ := range fieldNameNotFoundMap {
+			fieldNames = append(fieldNames, k)
+		}
+		fmt.Println(fmt.Sprintf("FieldNameNotFound %v %v %v", opt.ExcelName, opt.SheetName, fieldNames))
 	}
 	if opt.MgrType == "map" {
 		// 把key转换成实际类型
