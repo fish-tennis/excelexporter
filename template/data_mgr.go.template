@@ -48,7 +48,7 @@ func Load(dataDir string, filter func(fileName string) bool) error {
         {{else if eq .MgrType "slice"}}tmp{{.MgrName}} := &DataSlice[*pb.{{.MessageName}}]{}
         err = tmp{{.MgrName}}.LoadJson(dataDir+"{{.FileName}}")
 		{{else if eq .MgrType "object"}}tmp{{.MgrName}} := &pb.{{.MessageName}}{}
-        err = LoadObjectFromFile(dataDir+"{{.FileName}}", tmp{{.MgrName}})
+        err = LoadObjectFromJson(dataDir+"{{.FileName}}", tmp{{.MgrName}})
         {{end}}if err != nil {
             return err
         }

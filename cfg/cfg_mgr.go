@@ -3,6 +3,8 @@ package cfg
 import (
 	"encoding/json"
 	"errors"
+	"google.golang.org/protobuf/encoding/protojson"
+	"google.golang.org/protobuf/proto"
 	"log/slog"
 	"os"
 	"strings"
@@ -126,4 +128,18 @@ func (this *DataSlice[E]) checkDuplicateCfgId(fileName string) {
 			}
 		}
 	}
+}
+
+func LoadObjectFromJson(fileName string, obj proto.Message) error {
+	fileData, err := os.ReadFile(fileName)
+	if err != nil {
+		slog.Error("LoadObjectFromFileErr", "fileName", fileName, "err", err)
+		return err
+	}
+	err = protojson.Unmarshal(fileData, obj)
+	if err != nil {
+		slog.Error("LoadObjectFromFileErr", "fileName", fileName, "err", err)
+		return err
+	}
+	return nil
 }
