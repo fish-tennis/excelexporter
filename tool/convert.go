@@ -651,13 +651,34 @@ func ConvertFieldValue(fieldDesc *desc.FieldDescriptor, columnOption *ColumnOpti
 		//subMsgName := subMsgDesc.GetName()
 		// 简洁模式,不需要字段名,不支持多层结构 如1_2_5
 		if columnOption.IsNoFieldName() {
-			fieldValues := strings.Split(cellValue, "_")
-			for fieldIndex, fieldStr := range fieldValues {
-				if fieldIndex >= len(subMsgDesc.GetFields()) {
-					break
+			isRepeatedSingleFieldList := false
+			if len(subMsgDesc.GetFields()) == 1 {
+				subFieldDesc := subMsgDesc.GetFields()[0]
+				if subFieldDesc.IsRepeated() && !subFieldDesc.IsMap() {
+					// 非json格式 支持特殊的2层repeated嵌套
+					// message ItemNum {
+					//   int32 Id = 1;
+					//   int32 Num = 2;
+					// }
+					// message ItemNumList {
+					//   repeated ItemNum List = 1;
+					// }
+					// message XyzCfg {
+					//   repeated ItemNumList Items = 1;
+					// }
+					isRepeatedSingleFieldList = true
+					SetFieldValue(subMsgValue, subFieldDesc, columnOption, cellValue, true)
 				}
-				subFieldDesc := subMsgDesc.GetFields()[fieldIndex]
-				SetFieldValue(subMsgValue, subFieldDesc, columnOption, fieldStr, true)
+			}
+			if !isRepeatedSingleFieldList {
+				fieldValues := strings.Split(cellValue, "_")
+				for fieldIndex, fieldStr := range fieldValues {
+					if fieldIndex >= len(subMsgDesc.GetFields()) {
+						break
+					}
+					subFieldDesc := subMsgDesc.GetFields()[fieldIndex]
+					SetFieldValue(subMsgValue, subFieldDesc, columnOption, fieldStr, true)
+				}
 			}
 		} else if columnOption.IsFullFieldName() {
 			// 默认使用字段名模式,该模块填写略复杂,但是兼容性好一些 如CfgId_2#Args_1
