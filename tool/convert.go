@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/fatih/color"
 	"github.com/jhump/protoreflect/desc"
 	"github.com/xuri/excelize/v2"
 	"google.golang.org/protobuf/types/descriptorpb"
@@ -153,12 +154,12 @@ func ConvertSheet(exportOption *ExportOption, excelFile *excelize.File, opt *She
 	}
 	rows, err := excelFile.Rows(opt.SheetName)
 	if err != nil {
-		fmt.Println(fmt.Sprintf("sheet:%v err:%v", opt.SheetName, err))
+		color.Red("sheet:%v err:%v", opt.SheetName, err)
 		return nil, err
 	}
 	defer func() {
 		if err = rows.Close(); err != nil {
-			fmt.Println(fmt.Sprintf("sheet:%v err:%v", opt.SheetName, err))
+			color.Red("sheet:%v err:%v", opt.SheetName, err)
 		}
 	}()
 	hasParseExportGroupRow := false
@@ -171,7 +172,7 @@ func ConvertSheet(exportOption *ExportOption, excelFile *excelize.File, opt *She
 		rowIdx++
 		row, err := rows.Columns()
 		if err != nil {
-			fmt.Println(fmt.Sprintf("sheet:%v err:%v", opt.SheetName, err))
+			color.Red("sheet:%v err:%v", opt.SheetName, err)
 			return nil, err
 		}
 		if len(row) == 0 {
@@ -252,11 +253,11 @@ func ConvertSheet(exportOption *ExportOption, excelFile *excelize.File, opt *She
 				}
 			}
 			if keyColumnOpt == nil {
-				fmt.Println(fmt.Sprintf("key column not found: %v", opt.SheetName))
+				color.Red("key column not found: %v", opt.SheetName)
 				continue
 			}
 			if valueColumnOpt == nil {
-				fmt.Println(fmt.Sprintf("value column not found: %v", opt.SheetName))
+				color.Red("value column not found: %v", opt.SheetName)
 				continue
 			}
 			if keyColumnOpt.ColumnIndex >= len(row) || valueColumnOpt.ColumnIndex >= len(row) {
@@ -279,20 +280,20 @@ func ConvertSheet(exportOption *ExportOption, excelFile *excelize.File, opt *She
 				}
 				err = SetFieldValueJson(rowValue, fieldDesc, columnOpt, cell)
 				if err != nil {
-					fmt.Println(fmt.Sprintf("SetFieldValueJsonErr row%v sheet:%v err:%v", rowIdx, opt.SheetName, err))
+					color.Red("SetFieldValueJsonErr row%v sheet:%v err:%v", rowIdx, opt.SheetName, err)
 					continue
 				}
 			} else {
 				err = SetFieldValue(rowValue, fieldDesc, columnOpt, cell, false)
 				if err != nil {
-					fmt.Println(fmt.Sprintf("SetFieldValueErr row%v sheet:%v err:%v", rowIdx, opt.SheetName, err))
+					color.Red("SetFieldValueErr row%v sheet:%v err:%v", rowIdx, opt.SheetName, err)
 					continue
 				}
 			}
 			if v, ok := rowValue[fieldDesc.GetJSONName()]; ok {
 				m[fieldName] = v
 			} else {
-				fmt.Println(fmt.Sprintf("value convert err row%v sheet:%v key:%v value:%v", rowIdx, opt.SheetName, fieldName, cell))
+				color.Red("value convert err row%v sheet:%v key:%v value:%v", rowIdx, opt.SheetName, fieldName, cell)
 			}
 		} else {
 			// map和slice格式的配置数据
@@ -318,13 +319,13 @@ func ConvertSheet(exportOption *ExportOption, excelFile *excelize.File, opt *She
 					}
 					err = SetFieldValueJson(rowValue, fieldDesc, columnOpt, cell)
 					if err != nil {
-						fmt.Println(fmt.Sprintf("SetFieldValueJsonErr row%v sheet:%v err:%v", rowIdx, opt.SheetName, err))
+						color.Red("SetFieldValueJsonErr row%v sheet:%v err:%v", rowIdx, opt.SheetName, err)
 						continue
 					}
 				} else {
 					err = SetFieldValue(rowValue, fieldDesc, columnOpt, cell, false)
 					if err != nil {
-						fmt.Println(fmt.Sprintf("SetFieldValueErr row%v sheet:%v err:%v", rowIdx, opt.SheetName, err))
+						color.Red("SetFieldValueErr row%v sheet:%v err:%v", rowIdx, opt.SheetName, err)
 						continue
 					}
 				}
@@ -333,7 +334,7 @@ func ConvertSheet(exportOption *ExportOption, excelFile *excelize.File, opt *She
 		if opt.MgrType == "map" {
 			keyValue := rowValue[opt.MapKeyName]
 			if keyValue == nil {
-				fmt.Println(fmt.Sprintf("%v row%v sheet:%v key %s not found", opt.ExcelName, rowIdx, opt.SheetName, opt.MapKeyName))
+				color.Red("%v row%v sheet:%v key %s not found", opt.ExcelName, rowIdx, opt.SheetName, opt.MapKeyName)
 				fmt.Println(fmt.Sprintf("row: %v", rowValue))
 				continue
 			}
@@ -349,7 +350,7 @@ func ConvertSheet(exportOption *ExportOption, excelFile *excelize.File, opt *She
 		for k, _ := range fieldNameNotFoundMap {
 			fieldNames = append(fieldNames, k)
 		}
-		fmt.Println(fmt.Sprintf("FieldNameNotFound %v %v %v", opt.ExcelName, opt.SheetName, fieldNames))
+		color.Yellow("FieldNameNotFound %v %v %v", opt.ExcelName, opt.SheetName, fieldNames)
 	}
 	if opt.MgrType == "map" {
 		// 把key转换成实际类型
@@ -450,7 +451,7 @@ func convertToJsonMapByKeyType(m map[any]any, keyType string) any {
 	case "string":
 		return convertToJsonMap[string](m)
 	}
-	fmt.Println(fmt.Sprintf("convertToJsonMapByKeyType err keyType:%v", keyType))
+	color.Red("convertToJsonMapByKeyType err keyType:%v", keyType)
 	return m
 }
 
@@ -542,7 +543,7 @@ func SetFieldValueJson(m map[string]any, fieldDesc *desc.FieldDescriptor, opt *C
 	}
 	err := json.Unmarshal([]byte(cellValue), &jsonValue)
 	if err != nil {
-		fmt.Println(fmt.Sprintf("SetFieldValueJsonErr err:%v", err))
+		color.Red("SetFieldValueJsonErr err:%v", err)
 		return err
 	}
 	m[fieldDesc.GetJSONName()] = jsonValue
@@ -633,12 +634,12 @@ func ConvertFieldValue(fieldDesc *desc.FieldDescriptor, columnOption *ColumnOpti
 			// 枚举转数字
 			enumDesc := fieldDesc.GetEnumType()
 			if enumDesc == nil {
-				fmt.Println(fmt.Sprintf("GetEnumType error %v %v", fieldDesc.GetName(), cellValue))
+				color.Red("GetEnumType error %v %v", fieldDesc.GetName(), cellValue)
 				break
 			}
 			enumValueDesc := enumDesc.FindValueByName(cellValue)
 			if enumValueDesc == nil {
-				fmt.Println(fmt.Sprintf("convert enum error %v %v", fieldDesc.GetName(), cellValue))
+				color.Red("convert enum error %v %v", fieldDesc.GetName(), cellValue)
 				break
 			}
 			fieldValue = enumValueDesc.GetNumber()
@@ -686,7 +687,7 @@ func ConvertFieldValue(fieldDesc *desc.FieldDescriptor, columnOption *ColumnOpti
 			for _, kv := range kvs {
 				subFieldDesc := FindFieldDescriptor(subMsgDesc, kv.Key)
 				if subFieldDesc == nil {
-					fmt.Println(fmt.Sprintf("field %s not found", kv.Key))
+					color.Red("field %s not found", kv.Key)
 					continue
 				}
 				SetFieldValue(subMsgValue, subFieldDesc, columnOption, kv.Value, true)
@@ -701,7 +702,7 @@ func ConvertFieldValue(fieldDesc *desc.FieldDescriptor, columnOption *ColumnOpti
 				subFieldName := columnOption.FieldNames[fieldIndex]
 				subFieldDesc := subMsgDesc.FindFieldByName(subFieldName)
 				if subFieldDesc == nil {
-					fmt.Println(fmt.Sprintf("field %v %v not found", fieldIndex, subFieldName))
+					color.Red("field %v %v not found", fieldIndex, subFieldName)
 					continue
 				}
 				SetFieldValue(subMsgValue, subFieldDesc, columnOption, fieldStr, true)
@@ -713,7 +714,7 @@ func ConvertFieldValue(fieldDesc *desc.FieldDescriptor, columnOption *ColumnOpti
 		fieldValue = subMsgValue
 
 	default:
-		fmt.Println(fmt.Sprintf("field type %v not support", fieldDesc.GetType()))
+		color.Red("field type %v not support", fieldDesc.GetType())
 	}
 	return fieldValue
 }

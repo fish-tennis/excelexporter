@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/fatih/color"
 	"github.com/xuri/excelize/v2"
 	"gopkg.in/yaml.v3"
 	"os"
@@ -45,13 +46,13 @@ func ExportAll(exportOption *ExportOption, exportExcelFileName, exportSheetName 
 	checkExportOption(exportOption)
 	f, err := excelize.OpenFile(exportOption.DataImportPath + exportExcelFileName)
 	if err != nil {
-		fmt.Println(fmt.Sprintf("open excel err:%v file:%v", err, exportOption.DataImportPath+exportExcelFileName))
+		color.Red("open excel err:%v file:%v", err, exportOption.DataImportPath+exportExcelFileName)
 		return err
 	}
 	sheets, err := parseExportSheets(exportOption.DataImportPath+exportExcelFileName, exportSheetName)
 	f.Close()
 	if err != nil {
-		fmt.Println(fmt.Sprintf("ConvertSheetErr err:%v sheet:%v", err, exportSheetName))
+		color.Red("ConvertSheetErr err:%v sheet:%v", err, exportSheetName)
 		return err
 	}
 	fmt.Println(fmt.Sprintf("parseExportSheets excel:%v sheet:%v count:%v", exportExcelFileName, exportSheetName, len(sheets)))
@@ -98,13 +99,13 @@ func ExportAll(exportOption *ExportOption, exportExcelFileName, exportSheetName 
 		//exportFileName := getMapValueFn(exportCfg, "ExportName", sheetName)
 		f, err = excelize.OpenFile(exportOption.DataImportPath + excelFileName)
 		if err != nil {
-			fmt.Println(fmt.Sprintf("open excel err:%v file:%v", err, exportOption.DataImportPath+excelFileName))
+			color.Red("open excel err:%v file:%v", err, exportOption.DataImportPath+excelFileName)
 			return err
 		}
 		sheetData, err := ConvertSheet(exportOption, f, sheetOption)
 		f.Close()
 		if err != nil {
-			fmt.Println(fmt.Sprintf("ConvertSheetErr err:%v sheet:%v", err, sheetOption.SheetName))
+			color.Red("ConvertSheetErr err:%v sheet:%v", err, sheetOption.SheetName)
 			return err
 		}
 		fmt.Println(fmt.Sprintf("parse excel:%v sheet:%v", excelFileName, sheetOption.SheetName))
@@ -121,8 +122,8 @@ func ExportAll(exportOption *ExportOption, exportExcelFileName, exportSheetName 
 			if mergeInfo, ok := exportInfoMap[mergeName]; ok {
 				mergeData, err := mergeMgrData(mergeInfo.MgrData, sheetData)
 				if err != nil {
-					fmt.Println(fmt.Sprintf("mergeMgrDataErr excel:%v sheet:%v merge:%v err:%v",
-						excelFileName, sheetName, mergeName, err))
+					color.Red("mergeMgrDataErr excel:%v sheet:%v merge:%v err:%v",
+						excelFileName, sheetName, mergeName, err)
 					return err
 				}
 				mergeInfo.MgrData = mergeData
@@ -145,8 +146,8 @@ func ExportAll(exportOption *ExportOption, exportExcelFileName, exportSheetName 
 	for _, exportInfo := range exportInfoMap {
 		jsonData, err := json.MarshalIndent(exportInfo.MgrData, "", "  ")
 		if err != nil {
-			fmt.Println(fmt.Sprintf("ExportAllErr exportFileName:%v merge:%v err:%v",
-				exportInfo.SheetOption.ExportFileName, exportInfo.MergeName, err))
+			color.Red("ExportAllErr exportFileName:%v merge:%v err:%v",
+				exportInfo.SheetOption.ExportFileName, exportInfo.MergeName, err)
 			return err
 		}
 		exportFileName := ""
@@ -157,8 +158,8 @@ func ExportAll(exportOption *ExportOption, exportExcelFileName, exportSheetName 
 		}
 		err = os.WriteFile(exportOption.DataExportPath+exportFileName, jsonData, os.ModePerm)
 		if err != nil {
-			fmt.Println(fmt.Sprintf("ExportAllErr exportFileName:%v merge:%v err:%v",
-				exportFileName, exportInfo.MergeName, err))
+			color.Red("ExportAllErr exportFileName:%v merge:%v err:%v",
+				exportFileName, exportInfo.MergeName, err)
 			return err
 		}
 		md5Map[exportFileName] = GetMd5(jsonData)
@@ -167,12 +168,12 @@ func ExportAll(exportOption *ExportOption, exportExcelFileName, exportSheetName 
 		// 导出文件md5码
 		jsonData, err := json.MarshalIndent(md5Map, "", "  ")
 		if err != nil {
-			fmt.Println(fmt.Sprintf("export md5 err:%v", err))
+			color.Red("export md5 err:%v", err)
 			return err
 		}
 		err = os.WriteFile(exportOption.Md5ExportPath, jsonData, os.ModePerm)
 		if err != nil {
-			fmt.Println(fmt.Sprintf("export md5 err:%v", err))
+			color.Red("export md5 err:%v", err)
 			return err
 		}
 	}
@@ -208,7 +209,7 @@ func ExportAll(exportOption *ExportOption, exportExcelFileName, exportSheetName 
 	}
 	err = GenerateCode(generateInfo)
 	if err != nil {
-		fmt.Println(fmt.Sprintf("GenerateCodeErr err:%v", err))
+		color.Red("GenerateCodeErr err:%v", err)
 		return err
 	}
 	// ref功能,检查数据关联
@@ -221,14 +222,14 @@ func ExportAll(exportOption *ExportOption, exportExcelFileName, exportSheetName 
 			sheetData := exportInfo.MgrData
 			refInfo, ok := refCheckMap[columnOption.Ref]
 			if !ok {
-				fmt.Println(fmt.Sprintf("ref not exists sheetName:%v column:%v ref:%v", sheetName, columnOption.Name, columnOption.Ref))
+				color.Red("ref not exists sheetName:%v column:%v ref:%v", sheetName, columnOption.Name, columnOption.Ref)
 				continue
 			}
 			refKeyName := refInfo.SheetOption.MapKeyName
 			rangeSheetData(sheetData, columnOption.Name, refKeyName, func(checkId int32) {
 				if refSheetDataMap, ok := refInfo.MgrData.(map[int32]any); ok {
 					if _, ok := refSheetDataMap[checkId]; !ok {
-						fmt.Println(fmt.Sprintf("ref ERROR sheetName:%v column:%v ref:%v checkId:%v", sheetName, columnOption.Name, columnOption.Ref, checkId))
+						color.Red("ref ERROR sheetName:%v column:%v ref:%v checkId:%v", sheetName, columnOption.Name, columnOption.Ref, checkId)
 					}
 				}
 			})
@@ -294,12 +295,12 @@ func rangeElem(columnValue any, refKeyName string, fn func(checkId int32)) {
 func ExportExcelToJson(exportOption *ExportOption, excelFileName string, sheetOptions []*SheetOption) error {
 	f, err := excelize.OpenFile(exportOption.DataImportPath + excelFileName)
 	if err != nil {
-		fmt.Println(err)
+		color.Red("%v", err)
 		return err
 	}
 	defer func() {
 		if err = f.Close(); err != nil {
-			fmt.Println(err)
+			color.Red("%v", err)
 		}
 	}()
 	for _, sheetOpt := range sheetOptions {
@@ -336,23 +337,23 @@ func GetMd5(bytes []byte) string {
 func ExportByConfig(configFile string) error {
 	fileData, err := os.ReadFile(configFile)
 	if err != nil {
-		fmt.Println(fmt.Sprintf("read config err:%v file:%v", err, configFile))
+		color.Red("read config err:%v file:%v", err, configFile)
 		return err
 	}
 	options := &ExportOption{}
 	err = yaml.Unmarshal(fileData, options)
 	if err != nil {
-		fmt.Println(fmt.Sprintf("parse yaml config err:%v file:%v", err, configFile))
+		color.Red("parse yaml config err:%v file:%v", err, configFile)
 		return err
 	}
 	if len(options.CodeTemplateFiles) != len(options.CodeExportFiles) {
-		fmt.Println(fmt.Sprintf("len(CodeTemplateFiles) != len(CodeExportFiles) file:%v", configFile))
+		color.Red("len(CodeTemplateFiles) != len(CodeExportFiles) file:%v", configFile)
 		return errors.New("len(CodeTemplateFiles) != len(CodeExportFiles)")
 	}
 	if len(options.ProtoFiles) > 0 {
 		err = ParseProtoFile([]string{options.ProtoPath}, options.ProtoFiles...)
 		if err != nil {
-			fmt.Println(fmt.Sprintf("ParseProtoFile err:%v", err))
+			color.Red("ParseProtoFile err:%v", err)
 			return err
 		}
 	}
@@ -379,13 +380,13 @@ func autoCheckDir(dir *string) {
 func parseExportSheets(excel, exportSheetName string) ([]any, error) {
 	f, err := excelize.OpenFile(excel)
 	if err != nil {
-		fmt.Println(fmt.Sprintf("open excel err:%v file:%v", err, excel))
+		color.Red("open excel err:%v file:%v", err, excel)
 		return nil, err
 	}
 	sheets, err := parseExportSheetsFromFile(f, exportSheetName)
 	f.Close()
 	if err != nil {
-		fmt.Println(fmt.Sprintf("ConvertSheetErr err:%v sheet:%v", err, exportSheetName))
+		color.Red("ConvertSheetErr err:%v sheet:%v", err, exportSheetName)
 		return nil, err
 	}
 	fmt.Println(fmt.Sprintf("parseExportSheets excel:%v sheet:%v", excel, exportSheetName))
@@ -400,12 +401,12 @@ func parseExportSheetsFromFile(excelFile *excelize.File, exportSheetName string)
 	}
 	rows, err := excelFile.Rows(opt.SheetName)
 	if err != nil {
-		fmt.Println(fmt.Sprintf("sheet:%v err:%v", opt.SheetName, err))
+		color.Red("sheet:%v err:%v", opt.SheetName, err)
 		return nil, err
 	}
 	defer func() {
 		if err = rows.Close(); err != nil {
-			fmt.Println(fmt.Sprintf("sheet:%v err:%v", opt.SheetName, err))
+			color.Red("sheet:%v err:%v", opt.SheetName, err)
 		}
 	}()
 	opt.ColumnOpts = make([]*ColumnOption, 0)
@@ -415,7 +416,7 @@ func parseExportSheetsFromFile(excelFile *excelize.File, exportSheetName string)
 		rowIdx++
 		row, err := rows.Columns()
 		if err != nil {
-			fmt.Println(fmt.Sprintf("sheet:%v err:%v", opt.SheetName, err))
+			color.Red("sheet:%v err:%v", opt.SheetName, err)
 			return nil, err
 		}
 		if len(row) == 0 {

@@ -2,6 +2,7 @@ package tool
 
 import (
 	"fmt"
+	"github.com/fatih/color"
 	"os"
 	"path"
 	"text/template"
@@ -37,18 +38,18 @@ func GenerateCode(generateInfo *GenerateInfo) error {
 		codeFileName := generateInfo.ExportFiles[idx]
 		err = os.Mkdir(path.Dir(codeFileName), os.ModePerm)
 		if err != nil && !os.IsExist(err) {
-			fmt.Println(fmt.Sprintf("create %v err:%v", path.Dir(codeFileName), err))
+			color.Red("create %v err:%v", path.Dir(codeFileName), err)
 			return err
 		}
 		outFile, err := os.OpenFile(codeFileName, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, os.ModePerm)
 		if err != nil {
-			fmt.Println(fmt.Sprintf("open %v err:%v", codeFileName, err))
+			color.Red("open %v err:%v", codeFileName, err)
 			return err
 		}
 		defer outFile.Close()
 		err = tmpl.Execute(outFile, generateInfo)
 		if err != nil {
-			fmt.Println(fmt.Sprintf("tmpl.Execute %v err:%v", codeFileName, err))
+			color.Red("tmpl.Execute %v err:%v", codeFileName, err)
 			return err
 		}
 		fmt.Println(fmt.Sprintf("GenerateCode export:%v template:%v", codeFileName, templateFile))

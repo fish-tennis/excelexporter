@@ -2,6 +2,7 @@ package tool
 
 import (
 	"fmt"
+	"github.com/fatih/color"
 	"github.com/jhump/protoreflect/desc"
 	"github.com/jhump/protoreflect/desc/protoparse"
 	"google.golang.org/protobuf/types/descriptorpb"
@@ -51,24 +52,24 @@ func FindFieldDescriptor(msgDesc *desc.MessageDescriptor, fieldName string) *des
 	if strings.Index(fieldName, ".") > 0 {
 		names := strings.Split(fieldName, ".") // child.fieldName
 		if len(names) != 2 {
-			fmt.Println(fmt.Sprintf("fieldName error1: %v %v", msgDesc.GetName(), fieldName))
+			color.Red("fieldName error1: %v %v", msgDesc.GetName(), fieldName)
 			return nil
 		}
 		childName := names[0]
 		childFieldName := names[1]
 		childDesc := msgDesc.FindFieldByName(childName)
 		if childDesc == nil {
-			fmt.Println(fmt.Sprintf("fieldName error2: %v %v", msgDesc.GetName(), fieldName))
+			color.Red("fieldName error2: %v %v", msgDesc.GetName(), fieldName)
 			return nil
 		}
 		// child必须是个message
 		if childDesc.GetType() != descriptorpb.FieldDescriptorProto_TYPE_MESSAGE {
-			fmt.Println(fmt.Sprintf("fieldName error3: %v %v", msgDesc.GetName(), fieldName))
+			color.Red("fieldName error3: %v %v", msgDesc.GetName(), fieldName)
 			return nil
 		}
 		childMessageDesc := childDesc.GetMessageType()
 		if childMessageDesc == nil {
-			fmt.Println(fmt.Sprintf("fieldName error4: %v %v", msgDesc.GetName(), fieldName))
+			color.Red("fieldName error4: %v %v", msgDesc.GetName(), fieldName)
 			return nil
 		}
 		fieldDesc := childMessageDesc.FindFieldByName(childFieldName)
@@ -134,7 +135,7 @@ func GetKeyTypeString(fieldDesc *desc.FieldDescriptor) string {
 		return "string"
 
 	default:
-		fmt.Println(fmt.Sprintf("field type %v not support", fieldDesc.GetType()))
+		color.Red("field type %v not support", fieldDesc.GetType())
 	}
 	return ""
 }
