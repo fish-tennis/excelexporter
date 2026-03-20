@@ -358,6 +358,9 @@ func ConvertSheet(exportOption *ExportOption, excelFile *excelize.File, opt *She
 	} else if opt.MgrType == "slice" {
 		return s, nil
 	} else if opt.MgrType == "object" {
+		if opt.MgrType == "object" {
+			m = mergeExpandedSubFieldOfObject(m)
+		}
 		return convertToJsonMapByKeyType(m, "string"), nil
 	}
 	return nil, errors.New(fmt.Sprintf("unsupported MgrType %v sheet:%v", opt.MgrType, opt.SheetName))
@@ -391,6 +394,46 @@ func mergeExpandedSubField(opt *SheetOption, rowValue map[string]any) map[string
 		}
 	}
 	return rowValue
+}
+
+// 把展开的子字段合并
+func mergeExpandedSubFieldOfObject(m map[any]any) map[any]any {
+	opt := &SheetOption{}
+	hasExpandSubField := false
+	for k, _ := range m {
+		fieldName := k.(string)
+		columnOpt := &ColumnOption{Name: fieldName}
+		if strings.Index(fieldName, ".") > 0 {
+			expandNames := strings.Split(fieldName, ".")
+			if len(expandNames) == 2 {
+				columnOpt.ExpandName = expandNames[0]
+				columnOpt.ExpandFieldName = expandNames[1]
+			}
+		}
+		opt.ColumnOpts = append(opt.ColumnOpts, columnOpt)
+		if columnOpt.IsExpand() {
+			hasExpandSubField = true
+		}
+	}
+	if !hasExpandSubField {
+		return m
+	}
+	// 合并展开的子字段
+	for _, columnOpt := range opt.ColumnOpts {
+		if columnOpt.IsExpand() {
+			m[columnOpt.ExpandName] = make(map[string]any) // 子对象
+		}
+	}
+	for _, columnOpt := range opt.ColumnOpts {
+		if columnOpt.IsExpand() {
+			childValue := m[columnOpt.ExpandName].(map[string]any)
+			if fieldValue, ok := m[columnOpt.Name]; ok {
+				childValue[columnOpt.ExpandFieldName] = fieldValue // 子对象字段赋值
+				delete(m, columnOpt.Name)                          // 子对象字段赋值完,删除
+			}
+		}
+	}
+	return m
 }
 
 func isColumnNameDefineRow(column0 string) bool {
