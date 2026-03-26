@@ -274,10 +274,6 @@ func ConvertSheet(exportOption *ExportOption, excelFile *excelize.File, opt *She
 			columnOpt := valueColumnOpt
 			// format扩展 json
 			if columnOpt.Format == "json" {
-				// 允许不填最外层的{}
-				if len(cell) > 0 && cell[0] != '{' && cell[len(cell)-1] != '}' {
-					cell = "{" + cell + "}"
-				}
 				err = SetFieldValueJson(rowValue, fieldDesc, columnOpt, cell)
 				if err != nil {
 					color.Red("SetFieldValueJsonErr row%v sheet:%v err:%v", rowIdx, opt.SheetName, err)
@@ -313,10 +309,6 @@ func ConvertSheet(exportOption *ExportOption, excelFile *excelize.File, opt *She
 				cell := strings.TrimSpace(row[columnOpt.ColumnIndex]) // 移除首尾的空字符串
 				// format扩展 json
 				if columnOpt.Format == "json" {
-					// 允许不填最外层的{}
-					if len(cell) > 0 && cell[0] != '{' && cell[len(cell)-1] != '}' {
-						cell = "{" + cell + "}"
-					}
 					err = SetFieldValueJson(rowValue, fieldDesc, columnOpt, cell)
 					if err != nil {
 						color.Red("SetFieldValueJsonErr row%v sheet:%v err:%v", rowIdx, opt.SheetName, err)
@@ -577,16 +569,25 @@ func SetFieldValueJson(m map[string]any, fieldDesc *desc.FieldDescriptor, opt *C
 		// map字段
 		if fieldDesc.IsMap() {
 			jsonValue = make(map[string]any)
+			// 允许不填最外层的{}
+			if len(cellValue) > 0 && cellValue[0] != '{' && cellValue[len(cellValue)-1] != '}' {
+				cellValue = "{" + cellValue + "}"
+			}
 		} else {
 			// []
 			jsonValue = make([]any, 0)
 		}
 	} else {
 		jsonValue = make(map[string]any)
+		// 允许不填最外层的{}
+		if len(cellValue) > 0 && cellValue[0] != '{' && cellValue[len(cellValue)-1] != '}' {
+			cellValue = "{" + cellValue + "}"
+		}
 	}
 	err := json.Unmarshal([]byte(cellValue), &jsonValue)
 	if err != nil {
 		color.Red("SetFieldValueJsonErr err:%v", err)
+		color.Red("cellValue:%v", cellValue)
 		return err
 	}
 	m[fieldDesc.GetJSONName()] = jsonValue
