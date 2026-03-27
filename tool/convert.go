@@ -587,11 +587,15 @@ func SetFieldValueJson(m map[string]any, fieldDesc *desc.FieldDescriptor, opt *C
 	err := json.Unmarshal([]byte(cellValue), &jsonValue)
 	if err != nil {
 		color.Red("SetFieldValueJsonErr err:%v", err)
-		color.Red("cellValue:%v", cellValue)
+		fmt.Println(cellValue)
 		return err
 	}
-	m[fieldDesc.GetJSONName()] = jsonValue
-	//fmt.Println(fmt.Sprintf("SetFieldValueJson %v:%v", fieldDesc.GetJSONName(), jsonValue))
+	if opt.IsExpand() {
+		m[opt.Name] = jsonValue // 子字段展开
+	} else {
+		m[fieldDesc.GetJSONName()] = jsonValue
+	}
+	fmt.Println(fmt.Sprintf("SetFieldValueJson %v:%v", fieldDesc.GetJSONName(), jsonValue))
 	return nil
 }
 
