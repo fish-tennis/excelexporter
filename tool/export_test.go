@@ -16,7 +16,7 @@ func TestExportAll(t *testing.T) {
 		DataExportPath:    "./../data/json/",
 		Md5ExportPath:     "./../data/json/md5.json",
 		CodeTemplatePath:  "./../template/",
-		CodeExportPath:    "./../cfg/",
+		CodeExportFiles:   []string{"./../cfg/data_mgr.go"},
 		CodeTemplateFiles: []string{"data_mgr.go.template"},
 		ExportGroup:       "s",
 		DefaultGroup:      "cs",
@@ -47,6 +47,62 @@ func TestExport(t *testing.T) {
 	err = ExportExcelToJson(exportOption, excelFileName, opts)
 	if err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestMergeRepeatedFields(t *testing.T) {
+	columnOpts := []*ColumnOption{
+		{Name: "CfgId", Merge: false},
+		{Name: "Rewards", Merge: true, MergeKey: "__merge_Rewards_1__"},
+		{Name: "Rewards", Merge: true, MergeKey: "__merge_Rewards_2__"},
+		{Name: "Rewards", Merge: true, MergeKey: "__merge_Rewards_3__"},
+	}
+
+	rowValue := map[string]any{
+		"CfgId":               1,
+		"__merge_Rewards_1__": map[string]any{"CfgId": 1, "Num": 100},
+		"__merge_Rewards_2__": map[string]any{"CfgId": 2, "Num": 200},
+		"__merge_Rewards_3__": map[string]any{"CfgId": 3, "Num": 300},
+	}
+
+	mergeRepeatedFields(rowValue, columnOpts)
+
+	rewards, ok := rowValue["Rewards"].([]any)
+	if !ok {
+		t.Fatalf("expected Rewards to be []any, got %T", rowValue["Rewards"])
+	}
+	if len(rewards) != 3 {
+		t.Fatalf("expected 3 rewards, got %d", len(rewards))
+	}
+
+	if _, exists := rowValue["__merge_Rewards_1__"]; exists {
+		t.Error("merge key should be deleted after merge")
+	}
+
+	jsonData, _ := json.MarshalIndent(rowValue, "", "  ")
+	t.Logf("merged result:\n%s", string(jsonData))
+}
+
+func TestConvertColumnOptionMerge(t *testing.T) {
+	tests := []struct {
+		input    string
+		expected bool
+	}{
+		{"Rewards#Merge", true},
+		{"Rewards#Merge#Field=CfgId_Num", true},
+		{"Rewards#Field=CfgId_Num#Merge", true},
+		{"Rewards", false},
+		{"Rewards#Field=CfgId_Num", false},
+	}
+
+	for _, tt := range tests {
+		opt := ConvertColumnOption(tt.input)
+		if opt == nil {
+			t.Fatalf("ConvertColumnOption returned nil for input: %s", tt.input)
+		}
+		if opt.Merge != tt.expected {
+			t.Errorf("input: %s, expected Merge=%v, got Merge=%v", tt.input, tt.expected, opt.Merge)
+		}
 	}
 }
 

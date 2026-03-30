@@ -4,12 +4,13 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strconv"
+	"strings"
+
 	"github.com/fatih/color"
 	"github.com/jhump/protoreflect/desc"
 	"github.com/xuri/excelize/v2"
 	"google.golang.org/protobuf/types/descriptorpb"
-	"strconv"
-	"strings"
 )
 
 type SheetOption struct {
@@ -62,6 +63,9 @@ type ColumnOption struct {
 	//	----------------------------------------
 	ExpandName      string // 展开的字段,如注释中的Child
 	ExpandFieldName string // 展开的字段的字段名,如注释中的Id和Name
+
+	Merge    bool   // 是否参与数组合并,用于repeated字段的多列合并
+	MergeKey string // Merge列在rowValue中的唯一存储key
 }
 
 // 简洁模式,不需要字段名(#Field=no)
@@ -126,6 +130,8 @@ func ConvertColumnOption(cell string) *ColumnOption {
 			if len(kv) == 2 {
 				opt.Ref = kv[1]
 			}
+		case "merge":
+			opt.Merge = true
 		}
 	}
 	return opt
@@ -198,6 +204,9 @@ func ConvertSheet(exportOption *ExportOption, excelFile *excelize.File, opt *She
 					return nil, errors.New(fmt.Sprintf("columnName err %v sheet:%v", columnName, opt.SheetName))
 				}
 				columnOpt.ColumnIndex = columnIndex
+				if columnOpt.Merge {
+					columnOpt.MergeKey = fmt.Sprintf("__merge_%s_%d__", columnOpt.Name, columnIndex)
+				}
 				opt.ColumnOpts = append(opt.ColumnOpts, columnOpt)
 				// 如果没有指定MapKey,则默认第一个非注释列为MapKey
 				if opt.MgrType == "map" && opt.MapKeyName == "" {
@@ -331,9 +340,11 @@ func ConvertSheet(exportOption *ExportOption, excelFile *excelize.File, opt *She
 				continue
 			}
 			mergeExpandedSubField(opt, rowValue)
+			rowValue = mergeRepeatedFields(rowValue, opt.ColumnOpts)
 			m[keyValue] = rowValue
 		} else if opt.MgrType == "slice" {
 			mergeExpandedSubField(opt, rowValue)
+			rowValue = mergeRepeatedFields(rowValue, opt.ColumnOpts)
 			s = append(s, rowValue)
 		}
 	}
@@ -386,6 +397,43 @@ func mergeExpandedSubField(opt *SheetOption, rowValue map[string]any) map[string
 		}
 	}
 	return rowValue
+}
+
+func mergeRepeatedFields(rowValue map[string]any, columnOpts []*ColumnOption) map[string]any {
+	mergeFieldMap := make(map[string][]any)
+	hasMergeData := false
+	for _, columnOpt := range columnOpts {
+		if !columnOpt.Merge {
+			continue
+		}
+		fieldName := columnOpt.Name
+		if value, ok := rowValue[columnOpt.MergeKey]; ok && value != nil {
+			mergeFieldMap[fieldName] = append(mergeFieldMap[fieldName], value)
+			delete(rowValue, columnOpt.MergeKey)
+			hasMergeData = true
+			fmt.Println(fmt.Sprintf("delete MergeKey: %v value:%v", columnOpt.MergeKey, value))
+			fmt.Println(rowValue)
+		}
+	}
+	if hasMergeData {
+		fmt.Println(mergeFieldMap)
+		for fieldName, values := range mergeFieldMap {
+			if len(values) > 0 {
+				rowValue[fieldName] = values
+			}
+		}
+		fmt.Println(rowValue)
+	}
+	return rowValue
+}
+
+func hasMergeColumn(columnOpts []*ColumnOption) bool {
+	for _, columnOpt := range columnOpts {
+		if columnOpt.Merge {
+			return true
+		}
+	}
+	return false
 }
 
 // 把展开的子字段合并
@@ -521,6 +569,12 @@ func SetFieldValue(m map[string]any, fieldDesc *desc.FieldDescriptor, opt *Colum
 			if len(mapField) > 0 {
 				fieldValue = convertToJsonMapByKeyType(mapField, GetKeyTypeString(keyType))
 			}
+		} else if opt.Merge {
+			// repeated字段 + #Merge标记: 解析为单个元素,后续合并
+			elem := ConvertFieldValue(fieldDesc, opt, cellValue)
+			if elem != nil {
+				fieldValue = elem
+			}
 		} else {
 			// repeated字段
 			var repeatedElems []any
@@ -550,7 +604,10 @@ func SetFieldValue(m map[string]any, fieldDesc *desc.FieldDescriptor, opt *Colum
 	if fieldValue == nil {
 		return nil
 	}
-	if opt.IsExpand() {
+	if opt.Merge && !isSubMsg {
+		m[opt.MergeKey] = fieldValue
+		fmt.Println(fmt.Sprintf("SetFieldValueMerge %v:%v", opt.MergeKey, fieldValue))
+	} else if opt.IsExpand() {
 		m[opt.Name] = fieldValue // 子字段展开
 	} else {
 		m[fieldDesc.GetJSONName()] = fieldValue
@@ -573,6 +630,12 @@ func SetFieldValueJson(m map[string]any, fieldDesc *desc.FieldDescriptor, opt *C
 			if len(cellValue) > 0 && cellValue[0] != '{' && cellValue[len(cellValue)-1] != '}' {
 				cellValue = "{" + cellValue + "}"
 			}
+		} else if opt.Merge {
+			// repeated字段 + #Merge标记: 解析为单个元素,后续合并
+			jsonValue = make(map[string]any)
+			if len(cellValue) > 0 && cellValue[0] != '{' && cellValue[len(cellValue)-1] != '}' {
+				cellValue = "{" + cellValue + "}"
+			}
 		} else {
 			// []
 			jsonValue = make([]any, 0)
@@ -590,7 +653,9 @@ func SetFieldValueJson(m map[string]any, fieldDesc *desc.FieldDescriptor, opt *C
 		fmt.Println(cellValue)
 		return err
 	}
-	if opt.IsExpand() {
+	if opt.Merge {
+		m[opt.MergeKey] = jsonValue
+	} else if opt.IsExpand() {
 		m[opt.Name] = jsonValue // 子字段展开
 	} else {
 		m[fieldDesc.GetJSONName()] = jsonValue
