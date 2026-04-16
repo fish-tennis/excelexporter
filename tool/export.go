@@ -1,6 +1,7 @@
 package tool
 
 import (
+	"bytes"
 	"crypto/md5"
 	"encoding/hex"
 	"encoding/json"
@@ -8,16 +9,24 @@ import (
 	"fmt"
 	"github.com/fatih/color"
 	"github.com/xuri/excelize/v2"
+	"google.golang.org/protobuf/encoding/protodelim"
+	"google.golang.org/protobuf/encoding/protojson"
+	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/reflect/protoreflect"
+	"google.golang.org/protobuf/types/dynamicpb"
 	"gopkg.in/yaml.v3"
 	"os"
+	"path/filepath"
 	"strings"
 )
 
 // 导出设置项
 type ExportOption struct {
 	DataImportPath string `yaml:"DataImportPath"` // Excel导入目录(excel所在目录)
-	DataExportPath string `yaml:"DataExportPath"` // 数据导出目录
-	Md5ExportPath  string `yaml:"Md5ExportPath"`  // 可选项:导出md5文件完整路径
+	DataExportPath   string `yaml:"DataExportPath"`   // 数据导出目录
+	Md5ExportPath    string `yaml:"Md5ExportPath"`    // 可选项:导出md5文件完整路径(所有格式合并)
+	JsonMd5ExportPath string `yaml:"JsonMd5ExportPath"` // 可选项:导出json文件的md5完整路径
+	PbMd5ExportPath  string `yaml:"PbMd5ExportPath"`  // 可选项:导出pb文件的md5完整路径
 
 	CodeTemplatePath  string   `yaml:"CodeTemplatePath"`  // 代码模板目录
 	CodeTemplateFiles []string `yaml:"CodeTemplateFiles"` // 代码模板
@@ -31,6 +40,8 @@ type ExportOption struct {
 
 	ProtoPath  string   `yaml:"ProtoPath"`  // proto所在目录
 	ProtoFiles []string `yaml:"ProtoFiles"` // 需要解析的proto文件
+
+	ExportFormats []string `yaml:"ExportFormats"` // 导出格式: json pb
 }
 
 type ExportInfo struct {
@@ -141,8 +152,11 @@ func ExportAll(exportOption *ExportOption, exportExcelFileName, exportSheetName 
 		}
 	}
 
+	enabledFormats := getEnabledExportFormats(exportOption.ExportFormats)
 	// 导出
 	md5Map := make(map[string]string)
+	jsonMd5Map := make(map[string]string)
+	pbMd5Map := make(map[string]string)
 	for _, exportInfo := range exportInfoMap {
 		jsonData, err := json.MarshalIndent(exportInfo.MgrData, "", "  ")
 		if err != nil {
@@ -150,30 +164,76 @@ func ExportAll(exportOption *ExportOption, exportExcelFileName, exportSheetName 
 				exportInfo.SheetOption.ExportFileName, exportInfo.MergeName, err)
 			return err
 		}
-		exportFileName := ""
+		exportFileNameWithoutExt := ""
 		if exportInfo.MergeName == "" {
-			exportFileName = fmt.Sprintf("%s.json", exportInfo.SheetOption.SheetName)
+			exportFileNameWithoutExt = exportInfo.SheetOption.SheetName
 		} else {
-			exportFileName = fmt.Sprintf("%s.json", exportInfo.MergeName)
+			exportFileNameWithoutExt = exportInfo.MergeName
 		}
-		err = os.WriteFile(exportOption.DataExportPath+exportFileName, jsonData, os.ModePerm)
-		if err != nil {
-			color.Red("ExportAllErr exportFileName:%v merge:%v err:%v",
-				exportFileName, exportInfo.MergeName, err)
-			return err
+		if enabledFormats["json"] {
+			exportFileName := fmt.Sprintf("%s.json", exportFileNameWithoutExt)
+			err = os.WriteFile(filepath.Join(exportOption.DataExportPath, exportFileName), jsonData, os.ModePerm)
+			if err != nil {
+				color.Red("ExportAllErr exportFileName:%v merge:%v err:%v",
+					exportFileName, exportInfo.MergeName, err)
+				return err
+			}
+			md5Str := GetMd5(jsonData)
+			md5Map[exportFileName] = md5Str
+			jsonMd5Map[exportFileName] = md5Str
 		}
-		md5Map[exportFileName] = GetMd5(jsonData)
+		if enabledFormats["pb"] {
+			pbData, pbErr := marshalToProtoBinary(exportInfo.MgrData, exportInfo.SheetOption)
+			if pbErr != nil {
+				color.Red("marshalToProtoBinaryErr exportFileName:%v merge:%v err:%v",
+					exportFileNameWithoutExt, exportInfo.MergeName, pbErr)
+				return pbErr
+			}
+			exportFileName := fmt.Sprintf("%s.pb", exportFileNameWithoutExt)
+			err = os.WriteFile(filepath.Join(exportOption.DataExportPath, exportFileName), pbData, os.ModePerm)
+			if err != nil {
+				color.Red("ExportAllErr exportFileName:%v merge:%v err:%v",
+					exportFileName, exportInfo.MergeName, err)
+				return err
+			}
+			md5Str := GetMd5(pbData)
+			md5Map[exportFileName] = md5Str
+			pbMd5Map[exportFileName] = md5Str
+		}
 	}
 	if exportOption.Md5ExportPath != "" {
-		// 导出文件md5码
-		jsonData, err := json.MarshalIndent(md5Map, "", "  ")
+		jsonMd5Data, err := json.MarshalIndent(md5Map, "", "  ")
 		if err != nil {
 			color.Red("export md5 err:%v", err)
 			return err
 		}
-		err = os.WriteFile(exportOption.Md5ExportPath, jsonData, os.ModePerm)
+		err = os.WriteFile(exportOption.Md5ExportPath, jsonMd5Data, os.ModePerm)
 		if err != nil {
 			color.Red("export md5 err:%v", err)
+			return err
+		}
+	}
+	if exportOption.JsonMd5ExportPath != "" {
+		jsonMd5Data, err := json.MarshalIndent(jsonMd5Map, "", "  ")
+		if err != nil {
+			color.Red("export json md5 err:%v", err)
+			return err
+		}
+		err = os.WriteFile(exportOption.JsonMd5ExportPath, jsonMd5Data, os.ModePerm)
+		if err != nil {
+			color.Red("export json md5 err:%v", err)
+			return err
+		}
+	}
+	if exportOption.PbMd5ExportPath != "" {
+		pbMd5Data, err := json.MarshalIndent(pbMd5Map, "", "  ")
+		if err != nil {
+			color.Red("export pb md5 err:%v", err)
+			return err
+		}
+		err = os.WriteFile(exportOption.PbMd5ExportPath, pbMd5Data, os.ModePerm)
+		if err != nil {
+			color.Red("export pb md5 err:%v", err)
 			return err
 		}
 	}
@@ -236,6 +296,88 @@ func ExportAll(exportOption *ExportOption, exportExcelFileName, exportSheetName 
 		}
 	}
 	return nil
+}
+
+func getEnabledExportFormats(formats []string) map[string]bool {
+	result := map[string]bool{
+		"json": true,
+	}
+	if len(formats) == 0 {
+		return result
+	}
+	result = make(map[string]bool)
+	for _, format := range formats {
+		f := strings.ToLower(strings.TrimSpace(format))
+		if f == "json" || f == "pb" {
+			result[f] = true
+		}
+	}
+	if len(result) == 0 {
+		result["json"] = true
+	}
+	return result
+}
+
+func marshalToProtoBinary(v any, sheetOption *SheetOption) ([]byte, error) {
+	msgDesc := FindMessageDescriptor(sheetOption.MessageName)
+	if msgDesc == nil {
+		return nil, fmt.Errorf("message %s not found", sheetOption.MessageName)
+	}
+	msgType := msgDesc.UnwrapMessage()
+	switch sheetOption.MgrType {
+	case "map":
+		buffer := bytes.NewBuffer(nil)
+		dataMap, ok := v.(map[int32]any)
+		if !ok {
+			return nil, fmt.Errorf("invalid map data type: %T", v)
+		}
+		for _, row := range dataMap {
+			msg, err := toDynamicProtoMessage(msgType, row)
+			if err != nil {
+				return nil, err
+			}
+			if _, err = protodelim.MarshalTo(buffer, msg); err != nil {
+				return nil, err
+			}
+		}
+		return buffer.Bytes(), nil
+	case "slice":
+		buffer := bytes.NewBuffer(nil)
+		dataSlice, ok := v.([]any)
+		if !ok {
+			return nil, fmt.Errorf("invalid slice data type: %T", v)
+		}
+		for _, row := range dataSlice {
+			msg, err := toDynamicProtoMessage(msgType, row)
+			if err != nil {
+				return nil, err
+			}
+			if _, err = protodelim.MarshalTo(buffer, msg); err != nil {
+				return nil, err
+			}
+		}
+		return buffer.Bytes(), nil
+	case "object":
+		msg, err := toDynamicProtoMessage(msgType, v)
+		if err != nil {
+			return nil, err
+		}
+		return proto.Marshal(msg)
+	default:
+		return nil, fmt.Errorf("unsupported mgr type: %s", sheetOption.MgrType)
+	}
+}
+
+func toDynamicProtoMessage(msgType protoreflect.MessageDescriptor, v any) (proto.Message, error) {
+	jsonData, err := json.Marshal(v)
+	if err != nil {
+		return nil, err
+	}
+	msg := dynamicpb.NewMessage(msgType)
+	if err = protojson.Unmarshal(jsonData, msg); err != nil {
+		return nil, err
+	}
+	return msg, nil
 }
 
 func mergeMgrData(dst, src any) (any, error) {

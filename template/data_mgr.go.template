@@ -42,13 +42,18 @@ func Load(dataDir string, filter func(fileName string) bool) error {
     var err error
     {{range.Mgrs}}
     if filter == nil || filter("{{.FileName}}") {
+        resolvedFileName := ResolveDataFile(dataDir+"{{.FileName}}")
         // 考虑到并发安全,这里先加载到临时变量
         {{if eq .MgrType "map"}}tmp{{.MgrName}} := {{if eq .MapKeyType "int"}}NewDataMap{{else}}NewStrDataMap{{end}}[*pb.{{.MessageName}}]()
-        err = tmp{{.MgrName}}.LoadJson(dataDir+"{{.FileName}}")
+        err = tmp{{.MgrName}}.Load(resolvedFileName)
         {{else if eq .MgrType "slice"}}tmp{{.MgrName}} := &DataSlice[*pb.{{.MessageName}}]{}
-        err = tmp{{.MgrName}}.LoadJson(dataDir+"{{.FileName}}")
+        err = tmp{{.MgrName}}.Load(resolvedFileName)
 		{{else if eq .MgrType "object"}}tmp{{.MgrName}} := &pb.{{.MessageName}}{}
-        err = LoadObjectFromJson(dataDir+"{{.FileName}}", tmp{{.MgrName}})
+        if strings.HasSuffix(resolvedFileName, ".pb") {
+            err = LoadObjectFromPb(resolvedFileName, tmp{{.MgrName}})
+        } else {
+            err = LoadObjectFromJson(resolvedFileName, tmp{{.MgrName}})
+        }
         {{end}}if err != nil {
             return err
         }

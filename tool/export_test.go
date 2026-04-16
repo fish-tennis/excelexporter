@@ -1,9 +1,15 @@
 package tool
 
 import (
+	"bufio"
+	"bytes"
 	"encoding/json"
 	"fmt"
+	"io"
 	"testing"
+
+	"excelexporter/example/pb"
+	"google.golang.org/protobuf/encoding/protodelim"
 )
 
 func TestExportAll(t *testing.T) {
@@ -145,5 +151,40 @@ func TestProtoLoad(t *testing.T) {
 			field.GetFullyQualifiedJSONName(),
 			typeStr,
 		)
+	}
+}
+
+func TestMarshalToProtoBinary(t *testing.T) {
+	err := ParseProtoFile([]string{"./../proto"}, "cfg.proto")
+	if err != nil {
+		t.Fatal(err)
+	}
+	sliceData := []any{
+		map[string]any{"Level": 1, "NeedExp": 100},
+		map[string]any{"Level": 2, "NeedExp": 300},
+	}
+	opt := &SheetOption{
+		MessageName: "LevelExp",
+		MgrType:     "slice",
+	}
+	pbBytes, err := marshalToProtoBinary(sliceData, opt)
+	if err != nil {
+		t.Fatal(err)
+	}
+	reader := bufio.NewReader(bytes.NewReader(pbBytes))
+	count := 0
+	for {
+		levelExp := &pb.LevelExp{}
+		err = protodelim.UnmarshalFrom(reader, levelExp)
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			t.Fatal(err)
+		}
+		count++
+	}
+	if count != 2 {
+		t.Fatalf("unexpected decoded count: %d", count)
 	}
 }

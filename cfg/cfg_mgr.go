@@ -1,12 +1,18 @@
 package cfg
 
 import (
+	"bufio"
 	"encoding/json"
 	"errors"
+	"fmt"
+	"google.golang.org/protobuf/encoding/protodelim"
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
+	"io"
 	"log/slog"
 	"os"
+	"path/filepath"
+	"reflect"
 	"strings"
 )
 
@@ -45,6 +51,9 @@ func (this *DataMap[E]) Load(fileName string) error {
 	if strings.HasSuffix(fileName, ".json") {
 		return this.LoadJson(fileName)
 	}
+	if strings.HasSuffix(fileName, ".pb") {
+		return this.LoadPb(fileName)
+	}
 	return errors.New("unsupported file type")
 }
 
@@ -63,6 +72,41 @@ func (this *DataMap[E]) LoadJson(fileName string) error {
 	}
 	this.cfgs = cfgMap
 	slog.Info("LoadJson", "fileName", fileName, "count", len(this.cfgs))
+	return nil
+}
+
+// 从pb文件加载数据
+func (this *DataMap[E]) LoadPb(fileName string) error {
+	file, err := os.Open(fileName)
+	if err != nil {
+		slog.Error("LoadPbErr", "fileName", fileName, "err", err)
+		return err
+	}
+	defer file.Close()
+	reader := bufio.NewReader(file)
+	cfgMap := make(map[int32]E)
+	for {
+		cfg, newErr := newElement[E]()
+		if newErr != nil {
+			slog.Error("LoadPbErr", "fileName", fileName, "err", newErr)
+			return newErr
+		}
+		msg, ok := any(cfg).(proto.Message)
+		if !ok {
+			return fmt.Errorf("type %T does not implement proto.Message", cfg)
+		}
+		err = protodelim.UnmarshalFrom(reader, msg)
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			slog.Error("LoadPbErr", "fileName", fileName, "err", err)
+			return err
+		}
+		cfgMap[cfg.GetCfgId()] = cfg
+	}
+	this.cfgs = cfgMap
+	slog.Info("LoadPb", "fileName", fileName, "count", len(this.cfgs))
 	return nil
 }
 
@@ -92,6 +136,9 @@ func (this *DataSlice[E]) Load(fileName string) error {
 	if strings.HasSuffix(fileName, ".json") {
 		return this.LoadJson(fileName)
 	}
+	if strings.HasSuffix(fileName, ".pb") {
+		return this.LoadPb(fileName)
+	}
 	return errors.New("unsupported file type")
 }
 
@@ -110,6 +157,42 @@ func (this *DataSlice[E]) LoadJson(fileName string) error {
 	}
 	this.cfgs = cfgList
 	slog.Info("LoadJson", "fileName", fileName, "count", len(this.cfgs))
+	this.checkDuplicateCfgId(fileName)
+	return nil
+}
+
+// 从pb文件加载数据
+func (this *DataSlice[E]) LoadPb(fileName string) error {
+	file, err := os.Open(fileName)
+	if err != nil {
+		slog.Error("LoadPbErr", "fileName", fileName, "err", err)
+		return err
+	}
+	defer file.Close()
+	reader := bufio.NewReader(file)
+	var cfgList []E
+	for {
+		cfg, newErr := newElement[E]()
+		if newErr != nil {
+			slog.Error("LoadPbErr", "fileName", fileName, "err", newErr)
+			return newErr
+		}
+		msg, ok := any(cfg).(proto.Message)
+		if !ok {
+			return fmt.Errorf("type %T does not implement proto.Message", cfg)
+		}
+		err = protodelim.UnmarshalFrom(reader, msg)
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			slog.Error("LoadPbErr", "fileName", fileName, "err", err)
+			return err
+		}
+		cfgList = append(cfgList, cfg)
+	}
+	this.cfgs = cfgList
+	slog.Info("LoadPb", "fileName", fileName, "count", len(this.cfgs))
 	this.checkDuplicateCfgId(fileName)
 	return nil
 }
@@ -142,4 +225,52 @@ func LoadObjectFromJson(fileName string, obj proto.Message) error {
 		return err
 	}
 	return nil
+}
+
+func LoadObjectFromPb(fileName string, obj proto.Message) error {
+	fileData, err := os.ReadFile(fileName)
+	if err != nil {
+		slog.Error("LoadObjectFromFileErr", "fileName", fileName, "err", err)
+		return err
+	}
+	err = proto.Unmarshal(fileData, obj)
+	if err != nil {
+		slog.Error("LoadObjectFromFileErr", "fileName", fileName, "err", err)
+		return err
+	}
+	return nil
+}
+
+func ResolveDataFile(fileName string) string {
+	if strings.HasSuffix(fileName, ".json") {
+		pbFileName := strings.TrimSuffix(fileName, ".json") + ".pb"
+		if _, err := os.Stat(pbFileName); err == nil {
+			return pbFileName
+		}
+	}
+	return fileName
+}
+
+func EnsureDataFileExt(fileName, ext string) string {
+	if strings.HasSuffix(fileName, ext) {
+		return fileName
+	}
+	return strings.TrimSuffix(fileName, filepath.Ext(fileName)) + ext
+}
+
+func newElement[E any]() (E, error) {
+	var zero E
+	t := reflect.TypeOf(zero)
+	if t == nil {
+		return zero, errors.New("invalid nil element type")
+	}
+	if t.Kind() != reflect.Ptr {
+		return zero, fmt.Errorf("element type must be pointer, got %v", t)
+	}
+	v := reflect.New(t.Elem()).Interface()
+	elem, ok := v.(E)
+	if !ok {
+		return zero, fmt.Errorf("failed to cast element to generic type %T", zero)
+	}
+	return elem, nil
 }
