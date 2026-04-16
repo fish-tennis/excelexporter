@@ -7,6 +7,10 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"os"
+	"path/filepath"
+	"strings"
+
 	"github.com/fatih/color"
 	"github.com/xuri/excelize/v2"
 	"google.golang.org/protobuf/encoding/protodelim"
@@ -15,18 +19,13 @@ import (
 	"google.golang.org/protobuf/reflect/protoreflect"
 	"google.golang.org/protobuf/types/dynamicpb"
 	"gopkg.in/yaml.v3"
-	"os"
-	"path/filepath"
-	"strings"
 )
 
 // 导出设置项
 type ExportOption struct {
-	DataImportPath string `yaml:"DataImportPath"` // Excel导入目录(excel所在目录)
-	DataExportPath   string `yaml:"DataExportPath"`   // 数据导出目录
-	Md5ExportPath    string `yaml:"Md5ExportPath"`    // 可选项:导出md5文件完整路径(所有格式合并)
-	JsonMd5ExportPath string `yaml:"JsonMd5ExportPath"` // 可选项:导出json文件的md5完整路径
-	PbMd5ExportPath  string `yaml:"PbMd5ExportPath"`  // 可选项:导出pb文件的md5完整路径
+	DataImportPath string   `yaml:"DataImportPath"` // Excel导入目录(excel所在目录)
+	DataExportPath []string `yaml:"DataExportPath"` // 数据导出目录,和ExportFormats一一对应
+	Md5ExportPath  []string `yaml:"Md5ExportPath"`  // 可选项:导出md5文件完整路径,和ExportFormats一一对应
 
 	CodeTemplatePath  string   `yaml:"CodeTemplatePath"`  // 代码模板目录
 	CodeTemplateFiles []string `yaml:"CodeTemplateFiles"` // 代码模板
@@ -154,9 +153,10 @@ func ExportAll(exportOption *ExportOption, exportExcelFileName, exportSheetName 
 
 	enabledFormats := getEnabledExportFormats(exportOption.ExportFormats)
 	// 导出
-	md5Map := make(map[string]string)
-	jsonMd5Map := make(map[string]string)
-	pbMd5Map := make(map[string]string)
+	md5Map := make(map[int]map[string]string)
+	for i := range exportOption.ExportFormats {
+		md5Map[i] = make(map[string]string)
+	}
 	for _, exportInfo := range exportInfoMap {
 		jsonData, err := json.MarshalIndent(exportInfo.MgrData, "", "  ")
 		if err != nil {
@@ -170,19 +170,20 @@ func ExportAll(exportOption *ExportOption, exportExcelFileName, exportSheetName 
 		} else {
 			exportFileNameWithoutExt = exportInfo.MergeName
 		}
-		if enabledFormats["json"] {
+		if idx, ok := enabledFormats["json"]; ok {
 			exportFileName := fmt.Sprintf("%s.json", exportFileNameWithoutExt)
-			err = os.WriteFile(filepath.Join(exportOption.DataExportPath, exportFileName), jsonData, os.ModePerm)
+			exportPath := exportOption.DataExportPath[idx]
+			err = os.WriteFile(filepath.Join(exportPath, exportFileName), jsonData, os.ModePerm)
 			if err != nil {
 				color.Red("ExportAllErr exportFileName:%v merge:%v err:%v",
 					exportFileName, exportInfo.MergeName, err)
 				return err
 			}
-			md5Str := GetMd5(jsonData)
-			md5Map[exportFileName] = md5Str
-			jsonMd5Map[exportFileName] = md5Str
+			if idx < len(exportOption.Md5ExportPath) {
+				md5Map[idx][exportFileName] = GetMd5(jsonData)
+			}
 		}
-		if enabledFormats["pb"] {
+		if idx, ok := enabledFormats["pb"]; ok {
 			pbData, pbErr := marshalToProtoBinary(exportInfo.MgrData, exportInfo.SheetOption)
 			if pbErr != nil {
 				color.Red("marshalToProtoBinaryErr exportFileName:%v merge:%v err:%v",
@@ -190,50 +191,30 @@ func ExportAll(exportOption *ExportOption, exportExcelFileName, exportSheetName 
 				return pbErr
 			}
 			exportFileName := fmt.Sprintf("%s.pb", exportFileNameWithoutExt)
-			err = os.WriteFile(filepath.Join(exportOption.DataExportPath, exportFileName), pbData, os.ModePerm)
+			exportPath := exportOption.DataExportPath[idx]
+			err = os.WriteFile(filepath.Join(exportPath, exportFileName), pbData, os.ModePerm)
 			if err != nil {
 				color.Red("ExportAllErr exportFileName:%v merge:%v err:%v",
 					exportFileName, exportInfo.MergeName, err)
 				return err
 			}
-			md5Str := GetMd5(pbData)
-			md5Map[exportFileName] = md5Str
-			pbMd5Map[exportFileName] = md5Str
+			if idx < len(exportOption.Md5ExportPath) {
+				md5Map[idx][exportFileName] = GetMd5(pbData)
+			}
 		}
 	}
-	if exportOption.Md5ExportPath != "" {
-		jsonMd5Data, err := json.MarshalIndent(md5Map, "", "  ")
+	for formatIdx, md5FilePath := range exportOption.Md5ExportPath {
+		if md5FilePath == "" {
+			continue
+		}
+		md5Data, err := json.MarshalIndent(md5Map[formatIdx], "", "  ")
 		if err != nil {
 			color.Red("export md5 err:%v", err)
 			return err
 		}
-		err = os.WriteFile(exportOption.Md5ExportPath, jsonMd5Data, os.ModePerm)
+		err = os.WriteFile(md5FilePath, md5Data, os.ModePerm)
 		if err != nil {
 			color.Red("export md5 err:%v", err)
-			return err
-		}
-	}
-	if exportOption.JsonMd5ExportPath != "" {
-		jsonMd5Data, err := json.MarshalIndent(jsonMd5Map, "", "  ")
-		if err != nil {
-			color.Red("export json md5 err:%v", err)
-			return err
-		}
-		err = os.WriteFile(exportOption.JsonMd5ExportPath, jsonMd5Data, os.ModePerm)
-		if err != nil {
-			color.Red("export json md5 err:%v", err)
-			return err
-		}
-	}
-	if exportOption.PbMd5ExportPath != "" {
-		pbMd5Data, err := json.MarshalIndent(pbMd5Map, "", "  ")
-		if err != nil {
-			color.Red("export pb md5 err:%v", err)
-			return err
-		}
-		err = os.WriteFile(exportOption.PbMd5ExportPath, pbMd5Data, os.ModePerm)
-		if err != nil {
-			color.Red("export pb md5 err:%v", err)
 			return err
 		}
 	}
@@ -298,22 +279,22 @@ func ExportAll(exportOption *ExportOption, exportExcelFileName, exportSheetName 
 	return nil
 }
 
-func getEnabledExportFormats(formats []string) map[string]bool {
-	result := map[string]bool{
-		"json": true,
+func getEnabledExportFormats(formats []string) map[string]int {
+	result := map[string]int{
+		"json": 0,
 	}
 	if len(formats) == 0 {
 		return result
 	}
-	result = make(map[string]bool)
-	for _, format := range formats {
+	result = make(map[string]int)
+	for i, format := range formats {
 		f := strings.ToLower(strings.TrimSpace(format))
 		if f == "json" || f == "pb" {
-			result[f] = true
+			result[f] = i
 		}
 	}
 	if len(result) == 0 {
-		result["json"] = true
+		result["json"] = 0
 	}
 	return result
 }
@@ -466,7 +447,7 @@ func ExportSheetToJson(exportOption *ExportOption, excelFile *excelize.File, she
 	if sheetOption.ExportFileName == "" {
 		sheetOption.ExportFileName = fmt.Sprintf("%s.json", sheetOption.SheetName)
 	}
-	return os.WriteFile(exportOption.DataExportPath+sheetOption.ExportFileName, jsonData, os.ModePerm)
+	return os.WriteFile(exportOption.DataExportPath[0]+sheetOption.ExportFileName, jsonData, os.ModePerm)
 }
 
 func GetMd5(bytes []byte) string {
@@ -505,7 +486,9 @@ func ExportByConfig(configFile string) error {
 
 func checkExportOption(opt *ExportOption) {
 	autoCheckDir(&opt.DataImportPath)
-	autoCheckDir(&opt.DataExportPath)
+	for i := range opt.DataExportPath {
+		autoCheckDir(&opt.DataExportPath[i])
+	}
 	autoCheckDir(&opt.CodeTemplatePath)
 	autoCheckDir(&opt.ProtoPath)
 }

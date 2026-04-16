@@ -1,8 +1,10 @@
 #Excel导入目录(excel所在目录)
 DataImportPath: "./data/excel"
 
-#数据导出目录
-DataExportPath: "./data/json"
+#数据导出目录,和ExportFormats一一对应
+DataExportPath:
+  - "./data/json"
+  - "./data/pb"
 
 #导出格式: json、pb
 ExportFormats:
@@ -16,14 +18,10 @@ ProtoPath: "./proto"
 ProtoFiles:
   - "cfg.proto"
 
-#可选项:导出md5文件完整路径(所有格式合并)
-Md5ExportPath: "./data/json/md5.json"
-
-#可选项:导出json文件的md5完整路径
-JsonMd5ExportPath: "./data/json/json_md5.json"
-
-#可选项:导出pb文件的md5完整路径
-PbMd5ExportPath: "./data/json/pb_md5.json"
+#可选项:导出md5文件完整路径,和ExportFormats一一对应
+Md5ExportPath:
+  - "./data/json/json_md5.json"
+  - "./data/pb/pb_md5.json"
 
 #代码模板目录
 CodeTemplatePath: "./template/"
