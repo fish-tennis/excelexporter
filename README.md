@@ -5,7 +5,7 @@
 - 数据结构定义在proto文件中
 - 解析proto文件,获取proto中的message的结构信息
 - 解析Excel配置表,列名就是proto中定义的message的字段名
-- 导出为proto对应的json格式(也可以扩展为导出proto序列化后的二进制数据,以便于更高效的加载)
+- 导出为proto对应的json或pb格式(protobuf序列化后的二进制数据,以便于更高效的加载)
 - 支持批量导出,在一个excel里配置所有需要导出的配置表,可以批量导出并生成加载代码,把加载代码放到项目中,
 可以一个接口就完成加载所有数据,并支持并发,热更新,增量加载
 - 支持配置表关联检查
@@ -13,9 +13,8 @@
 - 测试用例在tool/export_test.go
 
 ## 项目导入
-- 加载导出的json数据(或二进制数据),直接反序列化成proto的message对象
+- 加载导出的json或pb数据,直接反序列化成proto的message对象
 - 测试用例在example/import_test.go
-- 同时存在同名`.pb`和`.json`时,默认优先加载`.pb`,不存在时回退`.json`
 
 ## 命令行
 ```shell
@@ -26,13 +25,20 @@ config: 配置文件
 #Excel导入目录(excel所在目录)
 DataImportPath: "./data/excel"
 
-#数据导出目录
-DataExportPath: "./data/json"
-
 #导出格式: json、pb
 ExportFormats:
   - "json"
   - "pb"
+
+#数据导出目录,和ExportFormats一一对应
+DataExportPath:
+  - "./data/json"
+  - "./data/pb"
+
+#可选项:导出md5文件完整路径,和ExportFormats一一对应
+Md5ExportPath:
+  - "./data/json/md5.json"
+  - "./data/pb/md5.json"
 
 #proto所在目录
 ProtoPath: "./proto"
@@ -42,15 +48,13 @@ ProtoFiles:
   - "export.proto"
   - "cfg.proto"
 
-#可选项:导出md5文件完整路径
-Md5ExportPath: "./data/json/md5.json"
-
 #代码模板目录
 CodeTemplatePath: "./template/"
 
 #代码模板
 CodeTemplateFiles:
   - "data_mgr.go.template"
+
 #代码导出目录 NOTE:和CodeTemplateFiles的数量要一致
 CodeExportFiles:
   - "./cfg/data_mgr.go"
@@ -282,6 +286,3 @@ Nested: 1,2,3
 说明:
 - 建议优先使用标准JSON(带`{}`),可读性更好
 - 在支持的场景下可省略最外层`{}`
-
-## 已支持:
-- 导出protobuf二进制数据(`.pb`)并可与`.json`并行导出

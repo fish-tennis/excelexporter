@@ -15,10 +15,6 @@ var (
     isLoading   = int32(0)
     register = &processRegister{}
 
-    // 配置数据文件扩展名,默认为".json",可设置为".pb"以加载protobuf格式
-    // 在调用Load之前设置此变量来控制加载格式
-    DataFileExt = ".json"
-
     {{range.Mgrs}}//{{.CodeComment}}
     {{if eq .MgrType "map"}}{{.MgrName}}{{if eq .MapKeyType "int"}} *DataMap{{else}} *StrDataMap{{end}}[*pb.{{.MessageName}}]{{end}}
     {{if eq .MgrType "slice"}}{{.MgrName}} *DataSlice[*pb.{{.MessageName}}]{{end}}

@@ -16,6 +16,12 @@ import (
 	"strings"
 )
 
+var (
+	// 配置数据文件扩展名,默认为".json",可设置为".pb"以加载protobuf格式
+	// 在调用Load之前设置此变量来控制加载格式
+	DataFileExt = ".json"
+)
+
 type CfgData interface {
 	GetCfgId() int32
 }
@@ -246,6 +252,9 @@ func ResolveDataFile(fileName string) string {
 }
 
 func EnsureDataFileExt(fileName, ext string) string {
+	if len(ext) > 0 && ext[0] != '.' {
+		ext = "." + ext
+	}
 	if strings.HasSuffix(fileName, ext) {
 		return fileName
 	}
