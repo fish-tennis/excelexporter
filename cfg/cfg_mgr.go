@@ -242,13 +242,7 @@ func LoadObjectFromPb(fileName string, obj proto.Message) error {
 }
 
 func ResolveDataFile(fileName string) string {
-	if strings.HasSuffix(fileName, ".json") {
-		pbFileName := strings.TrimSuffix(fileName, ".json") + ".pb"
-		if _, err := os.Stat(pbFileName); err == nil {
-			return pbFileName
-		}
-	}
-	return fileName
+	return EnsureDataFileExt(fileName, DataFileExt)
 }
 
 func EnsureDataFileExt(fileName, ext string) string {
@@ -273,4 +267,47 @@ func newElement[E any]() (E, error) {
 		return zero, fmt.Errorf("failed to cast element to generic type %T", zero)
 	}
 	return elem, nil
+}
+
+type loadable interface {
+	Load(filename string) error
+}
+
+func LoadConfig[L loadable](filter func(string) bool, fileName, dataDir string, newFn func() L, target *L) error {
+	if filter != nil && !filter(fileName) {
+		return nil
+	}
+	resolvedFileName := ResolveDataFile(dataDir + fileName)
+	tmp := newFn()
+	if err := tmp.Load(resolvedFileName); err != nil {
+		return err
+	}
+	*target = tmp
+	return nil
+}
+
+func LoadObjectConfig[T proto.Message](filter func(string) bool, fileName, dataDir string, newFn func() T, target *T) error {
+	if filter != nil && !filter(fileName) {
+		return nil
+	}
+	resolvedFileName := ResolveDataFile(dataDir + fileName)
+	tmp := newFn()
+	var err error
+	if strings.HasSuffix(resolvedFileName, ".pb") {
+		err = LoadObjectFromPb(resolvedFileName, tmp)
+	} else {
+		err = LoadObjectFromJson(resolvedFileName, tmp)
+	}
+	if err != nil {
+		return err
+	}
+	*target = tmp
+	return nil
+}
+
+func Process[T any](fn func(T) error, data T) error {
+	if fn != nil {
+		return fn(data)
+	}
+	return nil
 }

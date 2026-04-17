@@ -14,11 +14,16 @@ import (
 func TestResolveDataFile(t *testing.T) {
 	tempDir := t.TempDir()
 	jsonFile := filepath.Join(tempDir, "item.json")
-	pbFile := filepath.Join(tempDir, "item.pb")
-	if err := os.WriteFile(pbFile, []byte{1, 2, 3}, os.ModePerm); err != nil {
-		t.Fatal(err)
-	}
+
+	DataFileExt = ".json"
 	resolved := ResolveDataFile(jsonFile)
+	if resolved != jsonFile {
+		t.Fatalf("expected %s, got %s", jsonFile, resolved)
+	}
+
+	DataFileExt = ".pb"
+	resolved = ResolveDataFile(jsonFile)
+	pbFile := filepath.Join(tempDir, "item.pb")
 	if resolved != pbFile {
 		t.Fatalf("expected %s, got %s", pbFile, resolved)
 	}

@@ -15,6 +15,10 @@ var (
 	isLoading             = int32(0)
 	register              = &processRegister{}
 
+	// 配置数据文件扩展名,默认为".json",可设置为".pb"以加载protobuf格式
+	// 在调用Load之前设置此变量来控制加载格式
+	DataFileExt = ".json"
+
 	//物品数据
 	ItemCfgs *DataMap[*pb.ItemCfg]
 
