@@ -72,6 +72,78 @@ ExportAllExcelFile: "all.xlsx"
 ExportAllSheet: "ExportCfg"
 ```
 
+## 导出总表(all.xlsx)
+all.xlsx是一个导出总表(也叫索引表/配置注册表),它本身不包含具体的游戏配置数据,而是作为一个"元数据表",
+记录了所有需要导出的Excel配置表的信息。程序通过解析这个总表,自动遍历并导出所有引用的配置Excel文件。
+
+总表由配置文件中的`ExportAllExcelFile`和`ExportAllSheet`指定文件名和Sheet名,默认为`all.xlsx`中的`ExportCfg` Sheet。
+
+### 总表的列定义
+每一行代表一个配置表的导出定义,支持以下列:
+
+| 列名 | 必填 | 说明 |
+|------|------|------|
+| Excel | 是 | 对应的Excel文件名(如`itemcfg.xlsx`) |
+| Sheet | 是 | Excel中的Sheet名 |
+| Message | 否 | 对应的protobuf Message名,不填则默认使用Sheet名 |
+| Group | 否 | 分组标记(c/s/cs),用于按服务端/客户端筛选导出 |
+| MgrType | 否 | 管理器类型: map(默认)/slice/object,详见下方说明 |
+| MapKey | 否 | MgrType=map时的key字段名,不填则使用第一个非注释列 |
+| CodeComment | 否 | 代码注释 |
+| Merge | 否 | 合并名称,用于将多个Sheet的数据合并到同一个导出文件 |
+
+### 总表Excel示例
+```
+---------------------------------------------------------------------------------------------
+| Excel          | Sheet          | Message       | Group | MgrType | MapKey | CodeComment |
+---------------------------------------------------------------------------------------------
+| itemcfg.xlsx   | ItemCfg        | ItemCfg       | cs    | map     | CfgId  | 物品配置     |
+---------------------------------------------------------------------------------------------
+| levelcfg.xlsx  | LevelExp       | LevelExp      | cs    | slice   |        | 等级经验     |
+---------------------------------------------------------------------------------------------
+| global.xlsx    | GlobalCfg      | GlobalCfg     | cs    | object  |        | 全局配置     |
+---------------------------------------------------------------------------------------------
+| questcfg.xlsx  | QuestCfg       | QuestCfg      | cs    | map     | CfgId  | 任务配置     |
+---------------------------------------------------------------------------------------------
+```
+
+### 工作流程
+1. 程序读取all.xlsx总表,解析每行注册信息
+2. 根据Group列和配置文件中的ExportGroup进行分组过滤
+3. 打开每行Excel列指定的Excel文件,按Sheet列读取数据
+4. 根据MgrType将数据转换为对应格式(map/slice/object)
+5. 导出为JSON/PB格式文件
+6. 根据代码模板生成数据管理器代码
+7. 执行引用检查(Ref Check)
+
+## 管理器类型(MgrType)
+配置表支持3种管理器类型,通过总表的`MgrType`列指定:
+
+### map(默认)
+- 以某一列的值作为key,构建`map[key]RowData`的数据结构
+- 适用于有唯一标识(如CfgId)的配置表,如物品配置、任务配置等
+- 需要通过MapKey列指定key字段名(不填则默认使用第一个非注释列)
+- 导出的JSON格式为`{"1": {...}, "2": {...}}`
+
+### slice
+- 所有行数据按顺序组成一个数组`[]RowData`
+- 不需要key列,每一行直接作为数组的一个元素
+- 适用于没有自然主键的列表配置,如等级经验表
+- 导出的JSON格式为`[{...}, {...}]`
+
+### object
+- 采用Key-Value模式,Excel表中必须有`key`列和`value`列
+- key列填写proto字段名,value列填写对应的值
+- 最终导出为一个单独的JSON对象,而不是数组或map
+- 适用于全局参数配置(如服务器参数、系统常量等),只有一"组"数据,用Key-Value方式编辑更直观
+
+三种类型对比:
+| 特性 | map | slice | object |
+|------|-----|-------|--------|
+| JSON输出 | `{"1": {...}}` | `[{...}]` | `{field: value}` |
+| 需要key列 | 是 | 否 | 是(key=value模式) |
+| 典型场景 | 有唯一ID的配置表 | 无自然主键的列表配置 | 全局参数配置 |
+
 ## 简单示例1:
 - 由于proto文件中已经定义了数据结构,所以excel里只需要列名和proto定义的字段名一致,就可以知道字段的类型信息,
 所以excel里不需要再指定字段类型,假设物品的proto定义如下
@@ -329,3 +401,115 @@ message QuestCfg {
 - `#Sep`仅影响当前列的第一层字段分隔符,嵌套层级仍使用默认的`_`分隔符
 - 适用于字段值中包含`_`的场景,避免解析歧义
 - 可与`#Field`、`#Merge`等标记自由组合使用
+
+## 示例11: slice格式配置表
+当配置表没有自然的唯一主键时,可以使用slice格式,所有行数据按顺序组成一个数组。
+
+proto定义:
+```protobuf3
+message LevelExp {
+  int32 Level = 1;   // 等级
+  int32 NeedExp = 2; // 升到该等级需要的经验值
+}
+```
+
+在all.xlsx总表中注册(MgrType填写slice):
+```
+---------------------------------------------------------
+| Excel         | Sheet    | Message | MgrType | MapKey |
+---------------------------------------------------------
+| levelcfg.xlsx | LevelExp | LevelExp| slice   |        |
+---------------------------------------------------------
+```
+
+levelcfg.xlsx中的LevelExp Sheet配置:
+```
+----------------------------
+| Level | NeedExp          |
+----------------------------
+| 1     | 0                |
+----------------------------
+| 2     | 100              |
+----------------------------
+| 3     | 300              |
+----------------------------
+| 4     | 600              |
+----------------------------
+| 5     | 1000             |
+----------------------------
+```
+
+导出后的JSON(LevelExp.json):
+```json
+[
+  {"Level": 1, "NeedExp": 0},
+  {"Level": 2, "NeedExp": 100},
+  {"Level": 3, "NeedExp": 300},
+  {"Level": 4, "NeedExp": 600},
+  {"Level": 5, "NeedExp": 1000}
+]
+```
+
+说明:
+- slice格式不需要指定MapKey,每行直接作为数组的一个元素
+- 所有特性(#Field、#Format、#Merge、#Sep、展开字段等)均适用于slice格式
+- slice格式同样支持分组导出(##group)
+
+## 示例12: object格式配置表(Key-Value模式)
+object格式采用Key-Value模式,适用于全局配置(如服务器参数、系统常量等)。
+Excel表中必须有`key`列和`value`列,key列填写proto字段名,value列填写对应的值。
+
+proto定义:
+```protobuf3
+message GlobalCfg {
+  string ServerName = 1;   // 服务器名称
+  int32 MaxLevel = 2;      // 最大等级
+  int32 MaxPlayerNum = 3;  // 最大玩家数
+  float DropRate = 4;      // 掉落倍率
+  bool EnablePvP = 5;      // 是否开启PvP
+}
+```
+
+在all.xlsx总表中注册(MgrType填写object):
+```
+---------------------------------------------------------
+| Excel        | Sheet     | Message  | MgrType | MapKey |
+---------------------------------------------------------
+| global.xlsx  | GlobalCfg | GlobalCfg| object  |        |
+---------------------------------------------------------
+```
+
+global.xlsx中的GlobalCfg Sheet配置:
+```
+-------------------------------
+| key          | value        |
+-------------------------------
+| ServerName   | 测试服务器    |
+-------------------------------
+| MaxLevel     | 100          |
+-------------------------------
+| MaxPlayerNum | 5000         |
+-------------------------------
+| DropRate     | 1.5          |
+-------------------------------
+| EnablePvP    | true         |
+-------------------------------
+```
+
+导出后的JSON(GlobalCfg.json):
+```json
+{
+  "ServerName": "测试服务器",
+  "MaxLevel": 100,
+  "MaxPlayerNum": 5000,
+  "DropRate": 1.5,
+  "EnablePvP": true
+}
+```
+
+说明:
+- key列填写proto中定义的字段名,value列填写该字段的值
+- 程序会根据proto定义自动识别value列的数据类型(int/string/float/bool等)
+- value列支持复杂类型(message、repeated、map等),可配合#Field、#Format等标记使用
+- object格式也支持展开字段(点号语法),如key列填写`Base.CfgId`可将子字段合并到父message中
+- 导出的JSON是一个单独的对象(不是数组或map)
