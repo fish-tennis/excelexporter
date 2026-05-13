@@ -19,8 +19,8 @@ func TestExportAll(t *testing.T) {
 	}
 	exportOption := &ExportOption{
 		DataImportPath:    "./../data/excel/",
-		DataExportPath:    "./../data/json/",
-		Md5ExportPath:     "./../data/json/md5.json",
+		DataExportPath:    []string{"./../data/json/"},
+		Md5ExportPath:     []string{"./../data/json/md5.json"},
 		CodeTemplatePath:  "./../template/",
 		CodeExportFiles:   []string{"./../cfg/data_mgr.go"},
 		CodeTemplateFiles: []string{"data_mgr.go.template"},
@@ -41,7 +41,7 @@ func TestExport(t *testing.T) {
 	}
 	exportOption := &ExportOption{
 		DataImportPath: "./../data/excel/",
-		DataExportPath: "./../data/json/",
+		DataExportPath: []string{"./../data/json/"},
 	}
 	excelFileName := "questcfg.xlsx"
 	opts := []*SheetOption{

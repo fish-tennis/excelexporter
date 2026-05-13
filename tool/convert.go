@@ -4,12 +4,12 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/xuri/excelize/v2"
 	"strconv"
 	"strings"
 
 	"github.com/fatih/color"
 	"github.com/jhump/protoreflect/desc"
-	"github.com/xuri/excelize/v2"
 	"google.golang.org/protobuf/types/descriptorpb"
 )
 
@@ -66,6 +66,14 @@ type ColumnOption struct {
 
 	Merge    bool   // 是否参与数组合并,用于repeated字段的多列合并
 	MergeKey string // Merge列在rowValue中的唯一存储key
+	Sep      string // 自定义字段的第一层分隔符,通过#Sep=|指定,默认为"_"
+}
+
+func (c *ColumnOption) GetSep() string {
+	if c.Sep == "" {
+		return "_"
+	}
+	return c.Sep
 }
 
 // 简洁模式,不需要字段名(#Field=no)
@@ -132,6 +140,10 @@ func ConvertColumnOption(cell string) *ColumnOption {
 			}
 		case "merge":
 			opt.Merge = true
+		case "sep":
+			if len(kv) == 2 {
+				opt.Sep = kv[1]
+			}
 		}
 	}
 	return opt
@@ -762,8 +774,22 @@ func ConvertFieldValue(fieldDesc *desc.FieldDescriptor, columnOption *ColumnOpti
 		// 嵌套结构,递归解析
 		subMsgValue := make(map[string]any)
 		subMsgDesc := fieldDesc.GetMessageType()
-		//subMsgName := subMsgDesc.GetName()
 		// 简洁模式,不需要字段名,不支持多层结构 如1_2_5
+		subOpt := columnOption
+		if columnOption.Sep != "" {
+			subOpt = &ColumnOption{
+				Name:            columnOption.Name,
+				ColumnIndex:     columnOption.ColumnIndex,
+				ExportGroup:     columnOption.ExportGroup,
+				Format:          columnOption.Format,
+				FieldNames:      columnOption.FieldNames,
+				Ref:             columnOption.Ref,
+				ExpandName:      columnOption.ExpandName,
+				ExpandFieldName: columnOption.ExpandFieldName,
+				Merge:           columnOption.Merge,
+				MergeKey:        columnOption.MergeKey,
+			}
+		}
 		if columnOption.IsNoFieldName() {
 			isRepeatedSingleFieldList := false
 			if len(subMsgDesc.GetFields()) == 1 {
@@ -781,33 +807,33 @@ func ConvertFieldValue(fieldDesc *desc.FieldDescriptor, columnOption *ColumnOpti
 					//   repeated ItemNumList Items = 1;
 					// }
 					isRepeatedSingleFieldList = true
-					SetFieldValue(subMsgValue, subFieldDesc, columnOption, cellValue, true)
+					SetFieldValue(subMsgValue, subFieldDesc, subOpt, cellValue, true)
 				}
 			}
 			if !isRepeatedSingleFieldList {
-				fieldValues := strings.Split(cellValue, "_")
+				fieldValues := strings.Split(cellValue, columnOption.GetSep())
 				for fieldIndex, fieldStr := range fieldValues {
 					if fieldIndex >= len(subMsgDesc.GetFields()) {
 						break
 					}
 					subFieldDesc := subMsgDesc.GetFields()[fieldIndex]
-					SetFieldValue(subMsgValue, subFieldDesc, columnOption, fieldStr, true)
+					SetFieldValue(subMsgValue, subFieldDesc, subOpt, fieldStr, true)
 				}
 			}
 		} else if columnOption.IsFullFieldName() {
 			// 默认使用字段名模式,该模块填写略复杂,但是兼容性好一些 如CfgId_2#Args_1
-			kvs := convertPairString(nil, cellValue, "#", "_")
+			kvs := convertPairString(nil, cellValue, "#", columnOption.GetSep())
 			for _, kv := range kvs {
 				subFieldDesc := FindFieldDescriptor(subMsgDesc, kv.Key)
 				if subFieldDesc == nil {
 					color.Red("field %s not found", kv.Key)
 					continue
 				}
-				SetFieldValue(subMsgValue, subFieldDesc, columnOption, kv.Value, true)
+				SetFieldValue(subMsgValue, subFieldDesc, subOpt, kv.Value, true)
 			}
 		} else {
 			// #Field=Field1_Field2_Field3
-			fieldValues := strings.Split(cellValue, "_")
+			fieldValues := strings.Split(cellValue, columnOption.GetSep())
 			for fieldIndex, fieldStr := range fieldValues {
 				if fieldIndex >= len(columnOption.FieldNames) {
 					break
@@ -818,7 +844,7 @@ func ConvertFieldValue(fieldDesc *desc.FieldDescriptor, columnOption *ColumnOpti
 					color.Red("field %v %v not found", fieldIndex, subFieldName)
 					continue
 				}
-				SetFieldValue(subMsgValue, subFieldDesc, columnOption, fieldStr, true)
+				SetFieldValue(subMsgValue, subFieldDesc, subOpt, fieldStr, true)
 			}
 		}
 		if len(subMsgValue) == 0 {
