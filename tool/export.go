@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 
 	"github.com/fatih/color"
@@ -312,7 +313,13 @@ func marshalToProtoBinary(v any, sheetOption *SheetOption) ([]byte, error) {
 		if !ok {
 			return nil, fmt.Errorf("invalid map data type: %T", v)
 		}
-		for _, row := range dataMap {
+		keys := make([]int32, 0, len(dataMap))
+		for k := range dataMap {
+			keys = append(keys, k)
+		}
+		sort.Slice(keys, func(i, j int) bool { return keys[i] < keys[j] })
+		for _, k := range keys {
+			row := dataMap[k]
 			msg, err := toDynamicProtoMessage(msgType, row)
 			if err != nil {
 				return nil, err
