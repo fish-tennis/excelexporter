@@ -324,7 +324,9 @@ func marshalToProtoBinary(v any, sheetOption *SheetOption) ([]byte, error) {
 			if err != nil {
 				return nil, err
 			}
-			if _, err = protodelim.MarshalTo(buffer, msg); err != nil {
+			delimOpts := protodelim.MarshalOptions{}
+			delimOpts.Deterministic = true
+			if _, err = delimOpts.MarshalTo(buffer, msg); err != nil {
 				return nil, err
 			}
 		}
@@ -335,12 +337,14 @@ func marshalToProtoBinary(v any, sheetOption *SheetOption) ([]byte, error) {
 		if !ok {
 			return nil, fmt.Errorf("invalid slice data type: %T", v)
 		}
+		delimOpts := protodelim.MarshalOptions{}
+		delimOpts.Deterministic = true
 		for _, row := range dataSlice {
 			msg, err := toDynamicProtoMessage(msgType, row)
 			if err != nil {
 				return nil, err
 			}
-			if _, err = protodelim.MarshalTo(buffer, msg); err != nil {
+			if _, err = delimOpts.MarshalTo(buffer, msg); err != nil {
 				return nil, err
 			}
 		}
@@ -350,7 +354,7 @@ func marshalToProtoBinary(v any, sheetOption *SheetOption) ([]byte, error) {
 		if err != nil {
 			return nil, err
 		}
-		return proto.Marshal(msg)
+		return proto.MarshalOptions{Deterministic: true}.Marshal(msg)
 	default:
 		return nil, fmt.Errorf("unsupported mgr type: %s", sheetOption.MgrType)
 	}
