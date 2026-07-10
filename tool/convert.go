@@ -238,8 +238,8 @@ func ConvertSheet(exportOption *ExportOption, excelFile *excelize.File, opt *She
 			//fmt.Println(fmt.Sprintf("keyName:%v keyType:%v", opt.MapKeyName, opt.MapKeyType))
 			continue
 		}
-		// 解析导出分组标记
-		if !hasParseExportGroupRow && len(opt.ColumnOpts) > 0 && exportOption.ExportGroup != "" && isExportGroupRow(column0) {
+		// 解析导出分组标记(object类型使用group列按行过滤,不需要##group行)
+		if opt.MgrType != "object" && !hasParseExportGroupRow && len(opt.ColumnOpts) > 0 && exportOption.ExportGroup != "" && isExportGroupRow(column0) {
 			for _, columnOpt := range opt.ColumnOpts {
 				group := exportOption.DefaultGroup
 				if columnOpt.ColumnIndex < len(row) {
@@ -264,6 +264,7 @@ func ConvertSheet(exportOption *ExportOption, excelFile *excelize.File, opt *She
 			var (
 				keyColumnOpt   *ColumnOption
 				valueColumnOpt *ColumnOption
+				groupColumnOpt *ColumnOption
 			)
 			for _, columnOpt := range opt.ColumnOpts {
 				if strings.ToLower(columnOpt.Name) == "key" {
@@ -271,6 +272,9 @@ func ConvertSheet(exportOption *ExportOption, excelFile *excelize.File, opt *She
 				}
 				if strings.ToLower(columnOpt.Name) == "value" {
 					valueColumnOpt = columnOpt
+				}
+				if strings.ToLower(columnOpt.Name) == "group" {
+					groupColumnOpt = columnOpt
 				}
 			}
 			if keyColumnOpt == nil {
@@ -286,6 +290,18 @@ func ConvertSheet(exportOption *ExportOption, excelFile *excelize.File, opt *She
 			}
 			fieldName := strings.TrimSpace(row[keyColumnOpt.ColumnIndex])
 			cell := strings.TrimSpace(row[valueColumnOpt.ColumnIndex]) // 移除首尾的空字符串
+			if exportOption.ExportGroup != "" {
+				fieldGroup := ""
+				if groupColumnOpt != nil && groupColumnOpt.ColumnIndex < len(row) {
+					fieldGroup = strings.TrimSpace(row[groupColumnOpt.ColumnIndex])
+				}
+				if fieldGroup == "" {
+					fieldGroup = exportOption.DefaultGroup
+				}
+				if !strings.Contains(fieldGroup, exportOption.ExportGroup) {
+					continue
+				}
+			}
 			fieldDesc := FindFieldDescriptor(msgDesc, fieldName)
 			if fieldDesc == nil {
 				fieldNameNotFoundMap[fieldName] = struct{}{}

@@ -513,3 +513,30 @@ global.xlsx中的GlobalCfg Sheet配置:
 - value列支持复杂类型(message、repeated、map等),可配合#Field、#Format等标记使用
 - object格式也支持展开字段(点号语法),如key列填写`Base.CfgId`可将子字段合并到父message中
 - 导出的JSON是一个单独的对象(不是数组或map)
+
+### object格式的分组导出(group列)
+object格式支持一个可选的`group`列,用于声明每个字段(key对应的字段)的导出分组(c/s/cs),结合配置文件中的`ExportGroup`和`DefaultGroup`进行过滤。
+
+带group列的Excel配置示例(global.xlsx中的GlobalCfg Sheet):
+```
+------------------------------------------------
+| key          | value        | group        |
+------------------------------------------------
+| ServerName   | 测试服务器    | cs           |
+------------------------------------------------
+| MaxLevel     | 100          | s            |
+------------------------------------------------
+| MaxPlayerNum | 5000         | cs           |
+------------------------------------------------
+| DropRate     | 1.5          | c            |
+------------------------------------------------
+| EnablePvP    | true         | s            |
+------------------------------------------------
+```
+
+说明:
+- group列填写该字段(key对应的字段)的导出分组,可选值为`c`、`s`、`cs`
+- 当配置文件`ExportGroup=s`时,只有group为`s`或`cs`的字段会被导出,group为`c`的字段不会被导出(上例中DropRate不会被导出)
+- 当配置文件`ExportGroup=c`时,只有group为`c`或`cs`的字段会被导出,group为`s`的字段不会被导出(上例中MaxLevel、EnablePvP不会被导出)
+- 当某行的group列为空时,使用配置文件中的`DefaultGroup`作为该字段的分组
+- 当表中不配置group列时,所有字段正常导出,不做任何过滤(向后兼容,已有的object配置表无需修改)

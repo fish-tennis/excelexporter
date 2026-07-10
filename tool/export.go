@@ -231,7 +231,7 @@ func ExportAll(exportOption *ExportOption, exportExcelFileName, exportSheetName 
 		}
 		mgrName := exportInfo.SheetOption.MessageName + "s"
 		if exportInfo.MergeName != "" {
-			mgrName = exportInfo.MergeName
+			mgrName = exportInfo.MergeName + "s"
 		}
 		mgrInfo := &DataMgrInfo{
 			MessageName: exportInfo.SheetOption.MessageName,

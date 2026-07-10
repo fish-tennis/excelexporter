@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"excelexporter/example/pb"
+	"github.com/xuri/excelize/v2"
 	"google.golang.org/protobuf/encoding/protodelim"
 )
 
@@ -187,4 +188,122 @@ func TestMarshalToProtoBinary(t *testing.T) {
 	if count != 2 {
 		t.Fatalf("unexpected decoded count: %d", count)
 	}
+}
+
+func TestConvertSheetObjectGroup(t *testing.T) {
+	err := ParseProtoFile([]string{"./../proto"}, "cfg.proto")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	const sheetName = "TestObjectGroup"
+
+	makeFile := func(t *testing.T, header []interface{}, dataRows ...[]interface{}) *excelize.File {
+		t.Helper()
+		f := excelize.NewFile()
+		idx, err := f.NewSheet(sheetName)
+		if err != nil {
+			t.Fatalf("NewSheet err: %v", err)
+		}
+		f.SetActiveSheet(idx)
+		if err := f.SetSheetRow(sheetName, "A1", &header); err != nil {
+			t.Fatalf("SetSheetRow header err: %v", err)
+		}
+		for i, r := range dataRows {
+			if err := f.SetSheetRow(sheetName, fmt.Sprintf("A%d", i+2), &r); err != nil {
+				t.Fatalf("SetSheetRow data err: %v", err)
+			}
+		}
+		return f
+	}
+
+	convert := func(t *testing.T, f *excelize.File, exportGroup, defaultGroup string) map[string]any {
+		t.Helper()
+		exportOption := &ExportOption{
+			ExportGroup:  exportGroup,
+			DefaultGroup: defaultGroup,
+		}
+		opt := &SheetOption{
+			SheetName:   sheetName,
+			MessageName: "LevelExp",
+			MgrType:     "object",
+		}
+		result, err := ConvertSheet(exportOption, f, opt)
+		if err != nil {
+			t.Fatalf("ConvertSheet err: %v", err)
+		}
+		m, ok := result.(map[string]any)
+		if !ok {
+			t.Fatalf("expected map[string]any, got %T", result)
+		}
+		return m
+	}
+
+	assertKey := func(t *testing.T, m map[string]any, key string, want bool) {
+		t.Helper()
+		_, ok := m[key]
+		if ok != want {
+			t.Errorf("key %q exist=%v, want %v (map=%v)", key, ok, want, m)
+		}
+	}
+
+	t.Run("ExportGroup_s_keep_both", func(t *testing.T) {
+		f := makeFile(t,
+			[]interface{}{"key", "value", "group"},
+			[]interface{}{"Level", "1", "cs"},
+			[]interface{}{"NeedExp", "100", "s"},
+		)
+		defer func() { _ = f.Close() }()
+		m := convert(t, f, "s", "cs")
+		assertKey(t, m, "Level", true)
+		assertKey(t, m, "NeedExp", true)
+	})
+
+	t.Run("ExportGroup_c_filter_NeedExp", func(t *testing.T) {
+		f := makeFile(t,
+			[]interface{}{"key", "value", "group"},
+			[]interface{}{"Level", "1", "cs"},
+			[]interface{}{"NeedExp", "100", "s"},
+		)
+		defer func() { _ = f.Close() }()
+		m := convert(t, f, "c", "cs")
+		assertKey(t, m, "Level", true)
+		assertKey(t, m, "NeedExp", false)
+	})
+
+	t.Run("ExportGroup_empty_keep_both", func(t *testing.T) {
+		f := makeFile(t,
+			[]interface{}{"key", "value", "group"},
+			[]interface{}{"Level", "1", "cs"},
+			[]interface{}{"NeedExp", "100", "s"},
+		)
+		defer func() { _ = f.Close() }()
+		m := convert(t, f, "", "cs")
+		assertKey(t, m, "Level", true)
+		assertKey(t, m, "NeedExp", true)
+	})
+
+	t.Run("no_group_column_use_DefaultGroup", func(t *testing.T) {
+		f := makeFile(t,
+			[]interface{}{"key", "value"},
+			[]interface{}{"Level", "1"},
+			[]interface{}{"NeedExp", "100"},
+		)
+		defer func() { _ = f.Close() }()
+		m := convert(t, f, "s", "cs")
+		assertKey(t, m, "Level", true)
+		assertKey(t, m, "NeedExp", true)
+	})
+
+	t.Run("empty_group_cell_use_DefaultGroup", func(t *testing.T) {
+		f := makeFile(t,
+			[]interface{}{"key", "value", "group"},
+			[]interface{}{"Level", "1", ""},
+			[]interface{}{"NeedExp", "100", "s"},
+		)
+		defer func() { _ = f.Close() }()
+		m := convert(t, f, "c", "cs")
+		assertKey(t, m, "Level", true)
+		assertKey(t, m, "NeedExp", false)
+	})
 }
