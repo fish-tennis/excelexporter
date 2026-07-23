@@ -4,9 +4,10 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/xuri/excelize/v2"
 	"strconv"
 	"strings"
+
+	"github.com/xuri/excelize/v2"
 
 	"github.com/fatih/color"
 	"github.com/jhump/protoreflect/desc"
@@ -828,6 +829,22 @@ func ConvertFieldValue(fieldDesc *desc.FieldDescriptor, columnOption *ColumnOpti
 			}
 			if !isRepeatedSingleFieldList {
 				fieldValues := strings.Split(cellValue, columnOption.GetSep())
+				if len(fieldValues) > len(subMsgDesc.GetFields()) && len(subMsgDesc.GetFields()) > 0 {
+					// 如果最后1个字段是string,允许该字段包含sep字符
+					// message Msg {
+					//   string Key = 1;
+					//   string Value = 2;
+					// }
+					//	-------------------------------
+					//	| Id     | Msg               |
+					//	-------------------------------
+					//	| 1      | K1_a_b_c;K2_d_e_f |
+					//	-------------------------------
+					subFieldDesc := subMsgDesc.GetFields()[len(subMsgDesc.GetFields())-1]
+					if subFieldDesc != nil && subFieldDesc.GetType() == descriptorpb.FieldDescriptorProto_TYPE_STRING {
+						fieldValues = strings.SplitN(cellValue, columnOption.GetSep(), len(subMsgDesc.GetFields()))
+					}
+				}
 				for fieldIndex, fieldStr := range fieldValues {
 					if fieldIndex >= len(subMsgDesc.GetFields()) {
 						break
@@ -850,6 +867,14 @@ func ConvertFieldValue(fieldDesc *desc.FieldDescriptor, columnOption *ColumnOpti
 		} else {
 			// #Field=Field1_Field2_Field3
 			fieldValues := strings.Split(cellValue, columnOption.GetSep())
+			if len(fieldValues) > len(columnOption.FieldNames) && len(columnOption.FieldNames) > 0 {
+				// 如果最后1个字段是string,允许该字段包含sep字符
+				subFieldName := columnOption.FieldNames[len(columnOption.FieldNames)-1]
+				subFieldDesc := subMsgDesc.FindFieldByName(subFieldName)
+				if subFieldDesc != nil && subFieldDesc.GetType() == descriptorpb.FieldDescriptorProto_TYPE_STRING {
+					fieldValues = strings.SplitN(cellValue, columnOption.GetSep(), len(columnOption.FieldNames))
+				}
+			}
 			for fieldIndex, fieldStr := range fieldValues {
 				if fieldIndex >= len(columnOption.FieldNames) {
 					break
