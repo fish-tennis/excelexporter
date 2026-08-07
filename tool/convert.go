@@ -636,7 +636,10 @@ func SetFieldValue(m map[string]any, fieldDesc *desc.FieldDescriptor, opt *Colum
 	if opt.Merge && !isSubMsg {
 		m[opt.MergeKey] = fieldValue
 		fmt.Println(fmt.Sprintf("SetFieldValueMerge %v:%v", opt.MergeKey, fieldValue))
-	} else if opt.IsExpand() {
+	} else if opt.IsExpand() && !isSubMsg {
+		// 子字段展开(如Obj.SkillIds)仅在最外层rowValue生效,由后续mergeExpandedSubField合并到Obj子对象;
+		// 递归进入嵌套message后(isSubMsg=true)必须用字段自身的JSON名写入,否则会用外层expand的Name
+		// (如"Obj.SkillIds")污染嵌套子message,导致protojson反序列化时报 unknown field
 		m[opt.Name] = fieldValue // 子字段展开
 	} else {
 		m[fieldDesc.GetJSONName()] = fieldValue
